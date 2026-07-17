@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consultório | Agende com facilidade</title>
+<script>
+  (function () {
+    var savedTheme = localStorage.getItem('theme');
+    if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+    var savedPalette = localStorage.getItem('palette');
+    if (savedPalette) document.documentElement.setAttribute('data-palette', savedPalette);
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal: #6d5ba8;
+    --teal-dark: #5c4c8f;
+    --teal-light: #ede9f8;
+    --bg: #d9d2e8;
+    --bg-grad-start: #ddd6ec;
+    --bg-grad-end: #cdc3e0;
+    --card: #eee9f6;
+    --header-bg: rgba(238, 233, 246, 0.85);
+    --text: #363150;
+    --muted: #7a7593;
+    --border: #c9bfdd;
+    --shadow: rgba(70, 54, 110, 0.14);
+  }
+
+  :root[data-theme="dark"] {
+    --teal: #a78bfa;
+    --teal-dark: #c4b5fd;
+    --teal-light: #2f2a45;
+    --bg: #16131f;
+    --bg-grad-start: #130f1a;
+    --bg-grad-end: #1d1829;
+    --card: #221e30;
+    --header-bg: rgba(22, 19, 31, 0.85);
+    --text: #ece8f7;
+    --muted: #a89bc4;
+    --border: #362f49;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --teal: #a78bfa;
+      --teal-dark: #c4b5fd;
+      --teal-light: #2f2a45;
+      --bg: #16131f;
+      --bg-grad-start: #130f1a;
+      --bg-grad-end: #1d1829;
+      --card: #221e30;
+      --header-bg: rgba(22, 19, 31, 0.85);
+      --text: #ece8f7;
+      --muted: #a89bc4;
+      --border: #362f49;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  /* Paleta: Verde-sálvia */
+  :root[data-palette="sage"] {
+    --teal: #6b8f71;
+    --teal-dark: #587a5e;
+    --teal-light: #e6efe7;
+    --bg: #d7e2da;
+    --bg-grad-start: #dbe6de;
+    --bg-grad-end: #c9d8cd;
+    --card: #eaf2ec;
+    --header-bg: rgba(234, 242, 236, 0.85);
+    --border: #c3d2c7;
+    --shadow: rgba(60, 90, 70, 0.14);
+  }
+
+  :root[data-palette="sage"][data-theme="dark"] {
+    --teal: #8fb89a;
+    --teal-dark: #a9cdb2;
+    --teal-light: #24352a;
+    --bg: #121814;
+    --bg-grad-start: #10160f;
+    --bg-grad-end: #182018;
+    --card: #1c241d;
+    --header-bg: rgba(28, 36, 29, 0.85);
+    --border: #2c3a30;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="sage"]:not([data-theme="light"]) {
+      --teal: #8fb89a;
+      --teal-dark: #a9cdb2;
+      --teal-light: #24352a;
+      --bg: #121814;
+      --bg-grad-start: #10160f;
+      --bg-grad-end: #182018;
+      --card: #1c241d;
+      --header-bg: rgba(28, 36, 29, 0.85);
+      --border: #2c3a30;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  /* Paleta: Azul-suave */
+  :root[data-palette="azul"] {
+    --teal: #5c7f9e;
+    --teal-dark: #4c6b87;
+    --teal-light: #e6edf3;
+    --bg: #d6e2ea;
+    --bg-grad-start: #dae6ed;
+    --bg-grad-end: #c7d8e3;
+    --card: #eaf2f7;
+    --header-bg: rgba(234, 242, 247, 0.85);
+    --border: #c2d4de;
+    --shadow: rgba(50, 75, 100, 0.14);
+  }
+
+  :root[data-palette="azul"][data-theme="dark"] {
+    --teal: #8fb4d1;
+    --teal-dark: #a8c8e0;
+    --teal-light: #1e2b36;
+    --bg: #10161d;
+    --bg-grad-start: #0e131a;
+    --bg-grad-end: #161f28;
+    --card: #1b232c;
+    --header-bg: rgba(27, 35, 44, 0.85);
+    --border: #293846;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="azul"]:not([data-theme="light"]) {
+      --teal: #8fb4d1;
+      --teal-dark: #a8c8e0;
+      --teal-light: #1e2b36;
+      --bg: #10161d;
+      --bg-grad-start: #0e131a;
+      --bg-grad-end: #161f28;
+      --card: #1b232c;
+      --header-bg: rgba(27, 35, 44, 0.85);
+      --border: #293846;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  /* Paleta: Terracota */
+  :root[data-palette="terracota"] {
+    --teal: #c1794f;
+    --teal-dark: #a6633d;
+    --teal-light: #f7ebe1;
+    --bg: #e9d7c2;
+    --bg-grad-start: #ecdcc9;
+    --bg-grad-end: #dfc7a9;
+    --card: #f5ecdf;
+    --header-bg: rgba(245, 236, 223, 0.85);
+    --border: #ddc7a8;
+    --shadow: rgba(110, 70, 40, 0.14);
+  }
+
+  :root[data-palette="terracota"][data-theme="dark"] {
+    --teal: #e0a878;
+    --teal-dark: #edc09a;
+    --teal-light: #3a2a1e;
+    --bg: #1c140e;
+    --bg-grad-start: #19110c;
+    --bg-grad-end: #241a12;
+    --card: #251c15;
+    --header-bg: rgba(37, 28, 21, 0.85);
+    --border: #3d2e21;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-palette="terracota"]:not([data-theme="light"]) {
+      --teal: #e0a878;
+      --teal-dark: #edc09a;
+      --teal-light: #3a2a1e;
+      --bg: #1c140e;
+      --bg-grad-start: #19110c;
+      --bg-grad-end: #241a12;
+      --card: #251c15;
+      --header-bg: rgba(37, 28, 21, 0.85);
+      --border: #3d2e21;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: linear-gradient(160deg, var(--bg-grad-start) 0%, var(--bg-grad-end) 100%);
+    font-family: 'Nunito', sans-serif;
+    color: var(--text);
+    transition: background 0.2s, color 0.2s;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  /* Header */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--header-bg);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    transition: background 0.2s;
+  }
+
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .theme-toggle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    font-size: 18px;
+    color: var(--teal-dark);
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--teal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+  }
+
+  .btn {
+    display: inline-block;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-primary {
+    background: var(--teal);
+    color: white;
+    padding: 12px 24px;
+  }
+
+  .btn-primary:hover {
+    background: var(--teal-dark);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-header {
+    padding: 10px 22px;
+  }
+
+  /* Hero */
+  .hero {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 100px 24px 80px;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 0 20px;
+  }
+
+  .hero h1 span {
+    color: var(--teal);
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 620px;
+    margin: 0 auto 36px;
+  }
+
+  .btn-hero {
+    padding: 16px 36px;
+    font-size: 17px;
+  }
+
+  /* Benefits */
+  .benefits {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 24px 100px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+
+  .benefit-card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 36px 28px;
+    box-shadow: 0 10px 30px var(--shadow);
+    text-align: center;
+    transition: background 0.2s;
+  }
+
+  .benefit-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--teal-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    margin: 0 auto 20px;
+  }
+
+  .benefit-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 10px;
+  }
+
+  .benefit-card p {
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  @media (max-width: 800px) {
+    .benefits {
+      grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+      font-size: 32px;
+    }
+  }
+
+  .palette-switcher {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 10px;
+    box-shadow: 0 4px 12px var(--shadow);
+  }
+
+  .palette-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+
+  .palette-dot.active {
+    border-color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">🪻</div>
+        Consultório
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar tema">🌙</button>
+        <a href="login.html" class="btn btn-primary btn-header">Entrar</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>Sua agenda e seus <span>pacientes</span>, organizados automaticamente</h1>
+    <p>
+      O sistema agenda consultas conversando com seus pacientes pelo WhatsApp usando
+      inteligência artificial, e organiza tudo em um painel simples para você acompanhar.
+    </p>
+    <a href="#" class="btn btn-primary btn-hero">Começar agora</a>
+  </section>
+
+  <section class="benefits">
+    <div class="benefit-card">
+      <div class="benefit-icon">💬</div>
+      <h3>Agendamento automático no WhatsApp</h3>
+      <p>Seus pacientes marcam consultas conversando naturalmente, sem precisar ligar ou esperar resposta.</p>
+    </div>
+
+    <div class="benefit-card">
+      <div class="benefit-icon">🗂️</div>
+      <h3>Painel para gerenciar pacientes</h3>
+      <p>Veja sua agenda, histórico e dados dos pacientes em um só lugar, de forma clara e organizada.</p>
+    </div>
+
+    <div class="benefit-card">
+      <div class="benefit-icon">🔔</div>
+      <h3>Lembretes automáticos contra faltas</h3>
+      <p>O sistema avisa seus pacientes antes da consulta, reduzindo faltas e cancelamentos de última hora.</p>
+    </div>
+  </section>
+
+  <footer>
+    © 2026 Consultório. Todos os direitos reservados.
+  </footer>
+
+  <div class="palette-switcher" role="group" aria-label="Selecionar paleta de cores">
+    <button class="palette-dot" data-palette="lavanda" style="background:#6d5ba8" title="Lavanda" type="button"></button>
+    <button class="palette-dot" data-palette="sage" style="background:#6b8f71" title="Verde-sálvia" type="button"></button>
+    <button class="palette-dot" data-palette="azul" style="background:#5c7f9e" title="Azul-suave" type="button"></button>
+    <button class="palette-dot" data-palette="terracota" style="background:#c1794f" title="Terracota" type="button"></button>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var toggle = document.getElementById('themeToggle');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      function currentTheme() {
+        return root.getAttribute('data-theme') || (prefersDark ? 'dark' : 'light');
+      }
+
+      function updateIcon() {
+        toggle.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+      }
+
+      toggle.addEventListener('click', function () {
+        var next = currentTheme() === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        updateIcon();
+      });
+
+      updateIcon();
+
+      var paletteDots = document.querySelectorAll('.palette-dot');
+      var currentPalette = root.getAttribute('data-palette') || 'lavanda';
+
+      function markActivePalette() {
+        paletteDots.forEach(function (dot) {
+          dot.classList.toggle('active', dot.dataset.palette === currentPalette);
+        });
+      }
+
+      paletteDots.forEach(function (dot) {
+        dot.addEventListener('click', function () {
+          currentPalette = dot.dataset.palette;
+          root.setAttribute('data-palette', currentPalette);
+          localStorage.setItem('palette', currentPalette);
+          markActivePalette();
+        });
+      });
+
+      markActivePalette();
+    })();
+  </script>
+
+</body>
+</html>
