@@ -4,10 +4,23 @@ export type Paciente = {
   telefone: string;
   email: string | null;
   tipo_atendimento: "individual" | "casal";
+  tipo_procedimento: string | null;
   status: "ativo" | "inativo";
   criado_em: string;
   proxima_sessao: string | null;
 };
+
+export const PROCEDIMENTOS = [
+  { value: "avaliacao_neuropsicologica", label: "Avaliação neuropsicológica" },
+  { value: "terapia", label: "Terapia" },
+  { value: "reabilitacao_com_estimulacao", label: "Reabilitação com estimulação transcraniana" },
+  { value: "reabilitacao_sem_estimulacao", label: "Reabilitação sem estimulação transcraniana" },
+  { value: "neuromodulacao", label: "Neuromodulação" },
+] as const;
+
+export function labelProcedimento(value: string | null): string {
+  return PROCEDIMENTOS.find((p) => p.value === value)?.label ?? "—";
+}
 
 export type SessaoHoje = {
   id: number;
