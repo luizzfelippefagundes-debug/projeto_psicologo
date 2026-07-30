@@ -2,6 +2,7 @@ export type Paciente = {
   id: number;
   nome: string;
   telefone: string;
+  email: string | null;
   tipo_atendimento: "individual" | "casal";
   status: "ativo" | "inativo";
   criado_em: string;
