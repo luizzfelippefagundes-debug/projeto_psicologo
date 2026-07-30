@@ -219,6 +219,92 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     return [dict(row) for row in rows]
 
 
+class PacienteBody(BaseModel):
+    nome: str
+    telefone: str
+    email: EmailStr | None = None
+    tipo_atendimento: str = "individual"
+
+
+class PacienteUpdateBody(BaseModel):
+    nome: str | None = None
+    telefone: str | None = None
+    email: EmailStr | None = None
+    tipo_atendimento: str | None = None
+    status: str | None = None
+
+
+@app.post("/pacientes", status_code=status.HTTP_201_CREATED)
+async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth.get_current_profissional_id)):
+    if body.tipo_atendimento not in ("individual", "casal"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_atendimento inválido")
+
+    async with db.pool.acquire() as conn:
+        existente = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
+            profissional_id, body.telefone,
+        )
+        if existente:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Já existe um paciente com esse telefone"
+            )
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO pacientes (profissional_id, nome, telefone, email, tipo_atendimento)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, nome, telefone, email, tipo_atendimento, status, criado_em
+            """,
+            profissional_id, body.nome, body.telefone, body.email, body.tipo_atendimento,
+        )
+    return dict(row)
+
+
+@app.patch("/pacientes/{paciente_id}")
+async def editar_paciente(
+    paciente_id: int,
+    body: PacienteUpdateBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    if body.tipo_atendimento is not None and body.tipo_atendimento not in ("individual", "casal"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_atendimento inválido")
+    if body.status is not None and body.status not in ("ativo", "inativo"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status inválido")
+
+    async with db.pool.acquire() as conn:
+        atual = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+        if atual is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+
+        if body.telefone is not None:
+            duplicado = await conn.fetchval(
+                "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 AND id <> $3",
+                profissional_id, body.telefone, paciente_id,
+            )
+            if duplicado:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail="Já existe um paciente com esse telefone"
+                )
+
+        row = await conn.fetchrow(
+            """
+            UPDATE pacientes SET
+                nome = COALESCE($1, nome),
+                telefone = COALESCE($2, telefone),
+                email = COALESCE($3, email),
+                tipo_atendimento = COALESCE($4, tipo_atendimento),
+                status = COALESCE($5, status)
+            WHERE id = $6 AND profissional_id = $7
+            RETURNING id, nome, telefone, email, tipo_atendimento, status, criado_em
+            """,
+            body.nome, body.telefone, body.email, body.tipo_atendimento, body.status,
+            paciente_id, profissional_id,
+        )
+    return dict(row)
+
+
 @app.get("/sessoes/hoje")
 async def listar_sessoes_hoje(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
