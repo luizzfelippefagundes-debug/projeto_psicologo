@@ -14,6 +14,10 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const HORAS = Array.from({ length: 14 }, (_, i) => 7 + i); // 07:00 .. 20:00
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
 type FormState = {
   pacienteId: string;
   localId: string;
@@ -44,16 +48,25 @@ function sessaoParaFormState(sessao: SessaoPeriodo): FormState {
   };
 }
 
-function formStateVazio(dataPadrao: string, localId: string): FormState {
+function formStateVazio(dataPadrao: string, localId: string, horaPadrao: string): FormState {
   return {
     pacienteId: "",
     localId,
     data: dataPadrao,
-    hora: "09:00",
+    hora: horaPadrao,
     duracao: "50",
     modalidade: "presencial",
     observacoes: "",
   };
+}
+
+function InfoRow({ label, valor }: { label: string; valor: string }) {
+  return (
+    <div>
+      <p className="text-[12px] font-bold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 text-[14.5px] font-semibold">{valor}</p>
+    </div>
+  );
 }
 
 export function AgendaGrid({
@@ -71,14 +84,20 @@ export function AgendaGrid({
 }) {
   const router = useRouter();
   const [modalAberto, setModalAberto] = useState(false);
+  const [previewAberto, setPreviewAberto] = useState(false);
+  const [sessaoVisualizando, setSessaoVisualizando] = useState<SessaoPeriodo | null>(null);
   const [sessaoEditando, setSessaoEditando] = useState<SessaoPeriodo | null>(null);
-  const [form, setForm] = useState<FormState>(formStateVazio(weekDates[0], String(locais[0]?.id ?? "")));
+  const [form, setForm] = useState<FormState>(
+    formStateVazio(weekDates[0], String(locais[0]?.id ?? ""), "09:00")
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [arrastando, setArrastando] = useState<number | null>(null);
+  const [erroArrastar, setErroArrastar] = useState<string | null>(null);
 
-  function abrirCriacao(dataInicial?: string) {
+  function abrirCriacao(dataInicial?: string, horaInicial?: string) {
     setSessaoEditando(null);
-    setForm(formStateVazio(dataInicial ?? hojeISO, String(locais[0]?.id ?? "")));
+    setForm(formStateVazio(dataInicial ?? hojeISO, String(locais[0]?.id ?? ""), horaInicial ?? "09:00"));
     setErro(null);
     setModalAberto(true);
   }
@@ -88,6 +107,11 @@ export function AgendaGrid({
     setForm(sessaoParaFormState(sessao));
     setErro(null);
     setModalAberto(true);
+  }
+
+  function abrirPreview(sessao: SessaoPeriodo) {
+    setSessaoVisualizando(sessao);
+    setPreviewAberto(true);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -141,13 +165,44 @@ export function AgendaGrid({
     router.refresh();
   }
 
+  async function handleDrop(e: React.DragEvent, dateISO: string, hora: string) {
+    e.preventDefault();
+    const sessaoId = Number(e.dataTransfer.getData("text/plain"));
+    setArrastando(null);
+    if (!sessaoId) return;
+
+    const sessao = sessoes.find((s) => s.id === sessaoId);
+    if (!sessao) return;
+
+    setErroArrastar(null);
+    const res = await fetch(`${API_URL}/sessoes/${sessaoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ data_hora: `${dateISO}T${hora}:00-03:00` }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErroArrastar(data.detail ?? "Não deu pra mover a sessão pra esse horário.");
+      return;
+    }
+
+    router.refresh();
+  }
+
   return (
     <>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        {erroArrastar ? (
+          <p className="text-[13px] font-semibold text-red-600">{erroArrastar}</p>
+        ) : (
+          <p className="text-[13px] text-muted">Arraste uma sessão pra outro horário pra reagendar</p>
+        )}
         <button
           type="button"
           onClick={() => abrirCriacao()}
-          className="rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+          className="shrink-0 rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
         >
           + Nova sessão
         </button>
@@ -195,16 +250,25 @@ export function AgendaGrid({
             </div>
           ))}
 
-          {weekDates.map((dateISO, dayIndex) => (
-            <button
-              key={dateISO}
-              type="button"
-              onClick={() => abrirCriacao(dateISO)}
-              className="border-l border-border hover:bg-accent-soft/40"
-              style={{ gridColumn: dayIndex + 2, gridRow: `1 / span ${HORAS.length * 2}` }}
-              aria-label={`Nova sessão em ${dateISO}`}
-            />
-          ))}
+          {weekDates.map((dateISO, dayIndex) =>
+            HORAS.flatMap((hora, i) =>
+              [0, 30].map((minuto, meia) => {
+                const horaLabel = `${pad2(hora)}:${pad2(minuto)}`;
+                return (
+                  <button
+                    key={`${dateISO}-${horaLabel}`}
+                    type="button"
+                    onClick={() => abrirCriacao(dateISO, horaLabel)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDrop(e, dateISO, horaLabel)}
+                    className="border-l border-border hover:bg-accent-soft/40"
+                    style={{ gridColumn: dayIndex + 2, gridRow: `${i * 2 + meia + 1} / span 1` }}
+                    aria-label={`Nova sessão em ${dateISO} às ${horaLabel}`}
+                  />
+                );
+              })
+            )
+          )}
 
           {sessoes.map((sessao) => {
             const pos = sessaoGridPosition(sessao.data_hora, sessao.duracao_minutos);
@@ -213,8 +277,16 @@ export function AgendaGrid({
               <button
                 key={sessao.id}
                 type="button"
-                onClick={() => abrirEdicao(sessao)}
-                className="m-0.5 overflow-hidden rounded-lg border-l-[3px] border-accent bg-accent-soft px-2 py-1 text-left text-[12px] font-bold text-accent-dark hover:brightness-95"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", String(sessao.id));
+                  setArrastando(sessao.id);
+                }}
+                onDragEnd={() => setArrastando(null)}
+                onClick={() => abrirPreview(sessao)}
+                className={`m-0.5 cursor-grab overflow-hidden rounded-lg border-l-[3px] border-accent bg-accent-soft px-2 py-1 text-left text-[12px] font-bold text-accent-dark hover:brightness-95 active:cursor-grabbing ${
+                  arrastando === sessao.id ? "opacity-40" : ""
+                }`}
                 style={{
                   gridColumn: pos.dayIndex + 2,
                   gridRow: `${pos.rowStart} / span ${pos.rowSpan}`,
@@ -232,6 +304,54 @@ export function AgendaGrid({
           })}
         </div>
       </div>
+
+      <Modal open={previewAberto} onClose={() => setPreviewAberto(false)} title="Detalhes da sessão">
+        {sessaoVisualizando && (
+          <div className="flex flex-col gap-4">
+            <InfoRow label="Paciente" valor={sessaoVisualizando.paciente_nome} />
+            <InfoRow label="Local" valor={sessaoVisualizando.local_nome} />
+            <div className="grid grid-cols-2 gap-3">
+              <InfoRow
+                label="Data"
+                valor={new Intl.DateTimeFormat("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  timeZone: "America/Sao_Paulo",
+                }).format(new Date(sessaoVisualizando.data_hora))}
+              />
+              <InfoRow label="Hora" valor={formatHoraBrasilia(sessaoVisualizando.data_hora)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InfoRow label="Duração" valor={`${sessaoVisualizando.duracao_minutos} min`} />
+              <InfoRow
+                label="Modalidade"
+                valor={sessaoVisualizando.modalidade === "presencial" ? "Presencial" : "Teleconsulta"}
+              />
+            </div>
+            <InfoRow label="Anotações" valor={sessaoVisualizando.observacoes || "—"} />
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setPreviewAberto(false)}
+                className="rounded-xl border border-border px-5 py-2.5 text-[14.5px] font-bold text-fg transition-colors hover:bg-accent-soft"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewAberto(false);
+                  abrirEdicao(sessaoVisualizando);
+                }}
+                className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+              >
+                Editar
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={modalAberto}
