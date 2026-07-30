@@ -202,7 +202,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.status, p.criado_em,
+            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento, p.status, p.criado_em,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
@@ -219,11 +219,21 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     return [dict(row) for row in rows]
 
 
+TIPOS_PROCEDIMENTO = (
+    "avaliacao_neuropsicologica",
+    "terapia",
+    "reabilitacao_com_estimulacao",
+    "reabilitacao_sem_estimulacao",
+    "neuromodulacao",
+)
+
+
 class PacienteBody(BaseModel):
     nome: str
     telefone: str
     email: EmailStr | None = None
     tipo_atendimento: str = "individual"
+    tipo_procedimento: str
 
 
 class PacienteUpdateBody(BaseModel):
@@ -231,6 +241,7 @@ class PacienteUpdateBody(BaseModel):
     telefone: str | None = None
     email: EmailStr | None = None
     tipo_atendimento: str | None = None
+    tipo_procedimento: str | None = None
     status: str | None = None
 
 
@@ -238,6 +249,8 @@ class PacienteUpdateBody(BaseModel):
 async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth.get_current_profissional_id)):
     if body.tipo_atendimento not in ("individual", "casal"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_atendimento inválido")
+    if body.tipo_procedimento not in TIPOS_PROCEDIMENTO:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_procedimento inválido")
 
     async with db.pool.acquire() as conn:
         existente = await conn.fetchval(
@@ -251,11 +264,11 @@ async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth
 
         row = await conn.fetchrow(
             """
-            INSERT INTO pacientes (profissional_id, nome, telefone, email, tipo_atendimento)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, nome, telefone, email, tipo_atendimento, status, criado_em
+            INSERT INTO pacientes (profissional_id, nome, telefone, email, tipo_atendimento, tipo_procedimento)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em
             """,
-            profissional_id, body.nome, body.telefone, body.email, body.tipo_atendimento,
+            profissional_id, body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento,
         )
     return dict(row)
 
@@ -268,6 +281,8 @@ async def editar_paciente(
 ):
     if body.tipo_atendimento is not None and body.tipo_atendimento not in ("individual", "casal"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_atendimento inválido")
+    if body.tipo_procedimento is not None and body.tipo_procedimento not in TIPOS_PROCEDIMENTO:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_procedimento inválido")
     if body.status is not None and body.status not in ("ativo", "inativo"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status inválido")
 
@@ -295,11 +310,12 @@ async def editar_paciente(
                 telefone = COALESCE($2, telefone),
                 email = COALESCE($3, email),
                 tipo_atendimento = COALESCE($4, tipo_atendimento),
-                status = COALESCE($5, status)
-            WHERE id = $6 AND profissional_id = $7
-            RETURNING id, nome, telefone, email, tipo_atendimento, status, criado_em
+                tipo_procedimento = COALESCE($5, tipo_procedimento),
+                status = COALESCE($6, status)
+            WHERE id = $7 AND profissional_id = $8
+            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em
             """,
-            body.nome, body.telefone, body.email, body.tipo_atendimento, body.status,
+            body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento, body.status,
             paciente_id, profissional_id,
         )
     return dict(row)
