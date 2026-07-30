@@ -151,7 +151,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
             {filtrados.map((p) => (
               <tr
                 key={p.id}
-                onClick={() => abrirEdicao(p)}
+                onClick={() => router.push(`/pacientes/${p.id}`)}
                 className="cursor-pointer hover:bg-accent-soft/40"
               >
                 <td className="border-b border-border px-6 py-4 text-[14.5px] last:border-0">
@@ -175,15 +175,28 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
                   {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
                 </td>
                 <td className="border-b border-border px-6 py-4">
-                  <span
-                    className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
-                      p.status === "ativo"
-                        ? "bg-accent-soft text-accent-dark"
-                        : "bg-black/5 text-muted"
-                    }`}
-                  >
-                    {p.status === "ativo" ? "Ativo" : "Inativo"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                        p.status === "ativo"
+                          ? "bg-accent-soft text-accent-dark"
+                          : "bg-black/5 text-muted"
+                      }`}
+                    >
+                      {p.status === "ativo" ? "Ativo" : "Inativo"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        abrirEdicao(p);
+                      }}
+                      aria-label="Editar paciente"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                    >
+                      ✎
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

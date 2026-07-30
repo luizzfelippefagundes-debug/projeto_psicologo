@@ -5,6 +5,7 @@ import type {
   Local,
   Paciente,
   RegraHorario,
+  SessaoHistorico,
   SessaoHoje,
   SessaoPeriodo,
 } from "@/lib/format";
@@ -31,6 +32,14 @@ async function apiFetch<T>(path: string): Promise<T> {
 
 export function getPacientes() {
   return apiFetch<Paciente[]>("/pacientes");
+}
+
+export function getPaciente(id: number) {
+  return apiFetch<Paciente>(`/pacientes/${id}`);
+}
+
+export function getSessoesPaciente(id: number) {
+  return apiFetch<SessaoHistorico[]>(`/pacientes/${id}/sessoes`);
 }
 
 export function getSessoesHoje() {

@@ -32,6 +32,16 @@ export type SessaoHoje = {
   local_nome: string;
 };
 
+export type SessaoHistorico = {
+  id: number;
+  data_hora: string;
+  duracao_minutos: number;
+  modalidade: "presencial" | "teleconsulta";
+  status: "confirmada" | "concluida" | "cancelada";
+  observacoes: string | null;
+  local_nome: string;
+};
+
 export type DashboardStats = {
   consultas_hoje: number;
   pacientes_ativos: number;
