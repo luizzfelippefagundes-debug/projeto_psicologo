@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
-from app import auth, db
+from app import auth, db, notificacoes
 from app.config import settings
 
 
@@ -446,6 +446,13 @@ async def _validar_paciente_e_local(conn, profissional_id: int, paciente_id: int
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local não encontrado")
 
 
+async def _buscar_info_notificacao(conn, profissional_id: int, paciente_id: int, local_id: int):
+    paciente = await conn.fetchrow("SELECT nome, email FROM pacientes WHERE id = $1", paciente_id)
+    local = await conn.fetchrow("SELECT nome FROM locais WHERE id = $1", local_id)
+    profissional = await conn.fetchrow("SELECT nome FROM profissionais WHERE id = $1", profissional_id)
+    return paciente, local, profissional
+
+
 @app.post("/sessoes", status_code=status.HTTP_201_CREATED)
 async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get_current_profissional_id)):
     if body.modalidade not in ("presencial", "teleconsulta"):
@@ -468,6 +475,21 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Já existe uma sessão nesse horário para esse local",
             )
+
+        paciente, local, profissional = await _buscar_info_notificacao(
+            conn, profissional_id, body.paciente_id, body.local_id
+        )
+
+    await notificacoes.enviar_email_sessao(
+        tipo="confirmacao",
+        paciente_email=paciente["email"],
+        paciente_nome=paciente["nome"],
+        profissional_nome=profissional["nome"],
+        data_hora=row["data_hora"],
+        duracao_minutos=row["duracao_minutos"],
+        local_nome=local["nome"],
+        modalidade=row["modalidade"],
+    )
     return dict(row)
 
 
@@ -483,13 +505,14 @@ async def editar_sessao(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status inválido")
 
     async with db.pool.acquire() as conn:
+        atual = await conn.fetchrow(
+            "SELECT paciente_id, local_id FROM sessoes WHERE id = $1 AND profissional_id = $2",
+            sessao_id, profissional_id,
+        )
+        if atual is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+
         if body.paciente_id is not None or body.local_id is not None:
-            atual = await conn.fetchrow(
-                "SELECT paciente_id, local_id FROM sessoes WHERE id = $1 AND profissional_id = $2",
-                sessao_id, profissional_id,
-            )
-            if atual is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
             await _validar_paciente_e_local(
                 conn,
                 profissional_id,
@@ -519,6 +542,32 @@ async def editar_sessao(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Já existe uma sessão nesse horário para esse local",
             )
+
+        tipo_notificacao = None
+        if body.status == "cancelada":
+            tipo_notificacao = "cancelamento"
+        elif body.data_hora is not None:
+            tipo_notificacao = "reagendamento"
+
+        if tipo_notificacao and row is not None:
+            paciente, local, profissional = await _buscar_info_notificacao(
+                conn,
+                profissional_id,
+                body.paciente_id or atual["paciente_id"],
+                body.local_id or atual["local_id"],
+            )
+
+    if tipo_notificacao and row is not None:
+        await notificacoes.enviar_email_sessao(
+            tipo=tipo_notificacao,
+            paciente_email=paciente["email"],
+            paciente_nome=paciente["nome"],
+            profissional_nome=profissional["nome"],
+            data_hora=row["data_hora"],
+            duracao_minutos=row["duracao_minutos"],
+            local_nome=local["nome"],
+            modalidade=row["modalidade"],
+        )
 
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
