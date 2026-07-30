@@ -38,6 +38,14 @@ CREATE TABLE pacientes (
     email VARCHAR(150),
     tipo_atendimento VARCHAR(20) NOT NULL DEFAULT 'individual'
         CHECK (tipo_atendimento IN ('individual', 'casal')),
+    tipo_procedimento VARCHAR(60)
+        CHECK (tipo_procedimento IN (
+            'avaliacao_neuropsicologica',
+            'terapia',
+            'reabilitacao_com_estimulacao',
+            'reabilitacao_sem_estimulacao',
+            'neuromodulacao'
+        )), -- obrigatório na aplicação, não no banco (pacientes antigos ficam NULL)
     status VARCHAR(20) NOT NULL DEFAULT 'ativo'
         CHECK (status IN ('ativo', 'inativo')),
     consentimento_lgpd BOOLEAN NOT NULL DEFAULT false,
