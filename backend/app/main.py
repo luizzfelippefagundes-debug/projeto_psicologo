@@ -2,11 +2,13 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time
 
 import asyncpg
+from anthropic import AsyncAnthropic
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
 from app import auth, db
+from app.config import settings
 
 
 @asynccontextmanager
@@ -321,6 +323,53 @@ async def editar_paciente(
     return dict(row)
 
 
+@app.get("/pacientes/{paciente_id}")
+async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento,
+                   p.status, p.criado_em,
+                   prox.data_hora AS proxima_sessao
+            FROM pacientes p
+            LEFT JOIN LATERAL (
+                SELECT data_hora FROM sessoes
+                WHERE paciente_id = p.id AND status <> 'cancelada' AND data_hora >= now()
+                ORDER BY data_hora ASC
+                LIMIT 1
+            ) prox ON true
+            WHERE p.id = $1 AND p.profissional_id = $2
+            """,
+            paciente_id, profissional_id,
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+    return dict(row)
+
+
+@app.get("/pacientes/{paciente_id}/sessoes")
+async def listar_sessoes_paciente(paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        paciente = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+        if paciente is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+
+        rows = await conn.fetch(
+            """
+            SELECT s.id, s.data_hora, s.duracao_minutos, s.modalidade, s.status, s.observacoes,
+                   l.nome AS local_nome
+            FROM sessoes s
+            JOIN locais l ON l.id = s.local_id
+            WHERE s.paciente_id = $1 AND s.profissional_id = $2
+            ORDER BY s.data_hora DESC
+            """,
+            paciente_id, profissional_id,
+        )
+    return [dict(row) for row in rows]
+
+
 @app.get("/sessoes/hoje")
 async def listar_sessoes_hoje(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
@@ -494,3 +543,93 @@ async def dashboard_stats(profissional_id: int = Depends(auth.get_current_profis
         "consultas_hoje": consultas_hoje,
         "pacientes_ativos": pacientes_ativos,
     }
+
+
+LABELS_PROCEDIMENTO = {
+    "avaliacao_neuropsicologica": "Avaliação neuropsicológica",
+    "terapia": "Terapia",
+    "reabilitacao_com_estimulacao": "Reabilitação com estimulação transcraniana",
+    "reabilitacao_sem_estimulacao": "Reabilitação sem estimulação transcraniana",
+    "neuromodulacao": "Neuromodulação",
+}
+
+
+class ChatMensagem(BaseModel):
+    role: str
+    content: str
+
+
+class AssistenteChatBody(BaseModel):
+    mensagem: str
+    paciente_id: int | None = None
+    historico: list[ChatMensagem] = []
+
+
+@app.post("/assistente/chat")
+async def assistente_chat(
+    body: AssistenteChatBody, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    system_prompt = (
+        "Você é um assistente de apoio para uma psicóloga que usa um sistema de gestão de "
+        "pacientes. Responda em português, de forma breve e profissional."
+    )
+
+    if body.paciente_id is not None:
+        async with db.pool.acquire() as conn:
+            paciente = await conn.fetchrow(
+                """
+                SELECT nome, tipo_atendimento, tipo_procedimento, status
+                FROM pacientes WHERE id = $1 AND profissional_id = $2
+                """,
+                body.paciente_id, profissional_id,
+            )
+            if paciente is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+
+            sessoes = await conn.fetch(
+                """
+                SELECT s.data_hora, s.status, s.modalidade, s.observacoes, l.nome AS local_nome
+                FROM sessoes s
+                JOIN locais l ON l.id = s.local_id
+                WHERE s.paciente_id = $1 AND s.profissional_id = $2
+                ORDER BY s.data_hora DESC
+                LIMIT 10
+                """,
+                body.paciente_id, profissional_id,
+            )
+
+        procedimento_label = LABELS_PROCEDIMENTO.get(paciente["tipo_procedimento"], "não definido")
+        contexto_sessoes = "\n".join(
+            f"- {s['data_hora'].strftime('%d/%m/%Y %H:%M')} ({s['status']}, {s['modalidade']} em "
+            f"{s['local_nome']})" + (f": {s['observacoes']}" if s["observacoes"] else "")
+            for s in sessoes
+        ) or "Nenhuma sessão registrada ainda."
+
+        system_prompt += (
+            f"\n\nVocê está conversando sobre o paciente {paciente['nome']}. "
+            f"Tipo de atendimento: {paciente['tipo_atendimento']}. "
+            f"Tipo de procedimento: {procedimento_label}. "
+            f"Status: {paciente['status']}.\n"
+            f"Histórico de sessões (mais recentes primeiro):\n{contexto_sessoes}"
+        )
+
+    if not settings.anthropic_api_key:
+        return {
+            "resposta": (
+                "Assistente de IA ainda não está configurado (falta a chave da API da Anthropic). "
+                "Assim que a chave for adicionada, esta tela passa a responder de verdade."
+            )
+        }
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    resposta = await client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=[
+            *[{"role": m.role, "content": m.content} for m in body.historico],
+            {"role": "user", "content": body.mensagem},
+        ],
+    )
+    texto = "".join(block.text for block in resposta.content if block.type == "text")
+    return {"resposta": texto}
