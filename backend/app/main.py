@@ -431,6 +431,7 @@ class SessaoUpdateBody(BaseModel):
     modalidade: str | None = None
     observacoes: str | None = None
     status: str | None = None
+    notificar: bool = True
 
 
 async def _validar_paciente_e_local(conn, profissional_id: int, paciente_id: int, local_id: int):
@@ -544,10 +545,11 @@ async def editar_sessao(
             )
 
         tipo_notificacao = None
-        if body.status == "cancelada":
-            tipo_notificacao = "cancelamento"
-        elif body.data_hora is not None:
-            tipo_notificacao = "reagendamento"
+        if body.notificar:
+            if body.status == "cancelada":
+                tipo_notificacao = "cancelamento"
+            elif body.data_hora is not None:
+                tipo_notificacao = "reagendamento"
 
         if tipo_notificacao and row is not None:
             paciente, local, profissional = await _buscar_info_notificacao(

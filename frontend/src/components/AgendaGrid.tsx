@@ -94,6 +94,11 @@ export function AgendaGrid({
   const [salvando, setSalvando] = useState(false);
   const [arrastando, setArrastando] = useState<number | null>(null);
   const [erroArrastar, setErroArrastar] = useState<string | null>(null);
+  const [pendente, setPendente] = useState<{
+    titulo: string;
+    mensagem: string;
+    executar: (notificar: boolean) => Promise<void>;
+  } | null>(null);
 
   function abrirCriacao(dataInicial?: string, horaInicial?: string) {
     setSessaoEditando(null);
@@ -114,8 +119,7 @@ export function AgendaGrid({
     setPreviewAberto(true);
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function salvarSessao(notificar: boolean) {
     setErro(null);
     setSalvando(true);
 
@@ -127,6 +131,7 @@ export function AgendaGrid({
       duracao_minutos: Number(form.duracao),
       modalidade: form.modalidade,
       observacoes: form.observacoes || null,
+      ...(sessaoEditando ? { notificar } : {}),
     };
 
     const url = sessaoEditando ? `${API_URL}/sessoes/${sessaoEditando.id}` : `${API_URL}/sessoes`;
@@ -151,35 +156,55 @@ export function AgendaGrid({
     router.refresh();
   }
 
-  async function handleCancelar() {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (sessaoEditando) {
+      const original = sessaoParaFormState(sessaoEditando);
+      const mudouHorario = original.data !== form.data || original.hora !== form.hora;
+      if (mudouHorario) {
+        setPendente({
+          titulo: "Salvar alterações",
+          mensagem: `A sessão de ${sessaoEditando.paciente_nome} vai mudar de horário. Notificar o paciente por email?`,
+          executar: salvarSessao,
+        });
+        return;
+      }
+    }
+
+    salvarSessao(false);
+  }
+
+  async function cancelarSessao(notificar: boolean) {
     if (!sessaoEditando) return;
     setSalvando(true);
     await fetch(`${API_URL}/sessoes/${sessaoEditando.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ status: "cancelada" }),
+      body: JSON.stringify({ status: "cancelada", notificar }),
     });
     setSalvando(false);
     setModalAberto(false);
     router.refresh();
   }
 
-  async function handleDrop(e: React.DragEvent, dateISO: string, hora: string) {
-    e.preventDefault();
-    const sessaoId = Number(e.dataTransfer.getData("text/plain"));
-    setArrastando(null);
-    if (!sessaoId) return;
+  function handleCancelarClick() {
+    if (!sessaoEditando) return;
+    setPendente({
+      titulo: "Cancelar sessão",
+      mensagem: `Cancelar a sessão de ${sessaoEditando.paciente_nome}? Notificar o paciente por email?`,
+      executar: cancelarSessao,
+    });
+  }
 
-    const sessao = sessoes.find((s) => s.id === sessaoId);
-    if (!sessao) return;
-
+  async function reagendarPorArrastar(sessaoId: number, novaDataHoraISO: string, notificar: boolean) {
     setErroArrastar(null);
     const res = await fetch(`${API_URL}/sessoes/${sessaoId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ data_hora: `${dateISO}T${hora}:00-03:00` }),
+      body: JSON.stringify({ data_hora: novaDataHoraISO, notificar }),
     });
 
     if (!res.ok) {
@@ -189,6 +214,27 @@ export function AgendaGrid({
     }
 
     router.refresh();
+  }
+
+  function handleDrop(e: React.DragEvent, dateISO: string, hora: string) {
+    e.preventDefault();
+    const sessaoId = Number(e.dataTransfer.getData("text/plain"));
+    setArrastando(null);
+    if (!sessaoId) return;
+
+    const sessao = sessoes.find((s) => s.id === sessaoId);
+    if (!sessao) return;
+
+    const novaDataHoraISO = `${dateISO}T${hora}:00-03:00`;
+    setPendente({
+      titulo: "Mover sessão",
+      mensagem: `Mover a sessão de ${sessao.paciente_nome} para ${new Intl.DateTimeFormat("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date(novaDataHoraISO))} às ${hora}. Notificar o paciente por email?`,
+      executar: (notificar) => reagendarPorArrastar(sessaoId, novaDataHoraISO, notificar),
+    });
   }
 
   return (
@@ -483,7 +529,7 @@ export function AgendaGrid({
             {sessaoEditando ? (
               <button
                 type="button"
-                onClick={handleCancelar}
+                onClick={handleCancelarClick}
                 disabled={salvando}
                 className="text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
               >
@@ -501,6 +547,45 @@ export function AgendaGrid({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!pendente} onClose={() => setPendente(null)} title={pendente?.titulo ?? ""}>
+        {pendente && (
+          <div className="flex flex-col gap-4">
+            <p className="text-[14.5px]">{pendente.mensagem}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPendente(null)}
+                className="rounded-xl border border-border px-4 py-2.5 text-[13.5px] font-bold text-fg transition-colors hover:bg-accent-soft"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const acao = pendente.executar;
+                  setPendente(null);
+                  acao(false);
+                }}
+                className="rounded-xl border border-border px-4 py-2.5 text-[13.5px] font-bold text-fg transition-colors hover:bg-accent-soft"
+              >
+                Salvar sem notificar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const acao = pendente.executar;
+                  setPendente(null);
+                  acao(true);
+                }}
+                className="rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+              >
+                Salvar e notificar
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );
