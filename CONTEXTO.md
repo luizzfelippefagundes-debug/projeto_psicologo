@@ -1,91 +1,133 @@
-# Contexto do Projeto — Bot de Agendamento + Painel (Dra. Jamilly Tassinari)
+# Contexto do Projeto — Status atual (2026-07-20)
 
-## O que é
-Bot de agendamento no WhatsApp (IA + function calling) integrado a um painel web de gestão,
-para uma psicóloga autônoma, sem secretária, que atende em 2 locais físicos e por teleconsulta.
+> Este documento foi reescrito do zero nesta data porque a versão anterior descrevia um
+> projeto single-tenant só pra Dra. Jamilly, e o escopo mudou bastante desde então. Se você é
+> um agente/dev pegando isso pela primeira vez, leia isso inteiro antes de mexer em qualquer coisa.
 
-Contrato fechado: R$ 140/mês (pacote completo — bot + painel).
-Prazo total do projeto: 5 semanas (17/07 a 21/08/2026).
+## O que o projeto é hoje
 
-## Stack técnica
-- **WhatsApp**: Evolution API (self-hosted, open-source) — não é o WhatsApp Cloud API oficial.
-  Número será separado do pessoal da Jamilly. **Bloqueio atual**: ela ainda não comprou o chip
-  do número definitivo — desenvolver e testar com um número de teste/sandbox até lá.
-- **Backend**: Python (FastAPI) ou Node.js — a definir.
-- **IA**: OpenAI API (GPT-4o-mini), usando function calling para ações de agendamento.
-- **Banco de dados**: PostgreSQL hospedado no **Neon** (serverless, tier gratuito, sem servidor
-  próprio pra gerenciar). Agenda é **nativa** (não usa Google Calendar — ela não usa
-  nenhuma ferramenta hoje, tudo é manual, então não há nada externo para espelhar).
-- **Frontend do painel**: a definir (React/Next.js sugerido).
-- **Teleconsulta**: gerar link de chamada (Meet/Zoom) automaticamente ao confirmar a sessão.
+Começou como um bot de agendamento no WhatsApp + painel web só pra Dra. Jamilly Tassinari
+(psicóloga). Em 2026-07-20 o escopo virou **SaaS multi-tenant**: qualquer profissional pode
+criar conta e usar o sistema, cada um com seus próprios dados isolados. O dono do projeto
+(Luiz) está populando os dados ele mesmo, testando como se fosse o primeiro usuário real.
 
-## Regras de negócio confirmadas com a Jamilly
+**Não está mais amarrado a nenhum cliente específico.** Um segundo cliente ("Hebert") chegou a
+ser cogitado no meio do caminho mas não avançou — não é relevante pro estado atual.
 
-### Locais de atendimento
-- 2 locais: **Barra de São Francisco** e **Vitória (ES)**.
-- Cada local tem sua própria grade de horário.
-- O bot precisa perguntar/informar o local no momento do agendamento.
+## ⚠️ Atenção antes de continuar
 
-### Disponibilidade
-- Não atende sábado e domingo.
-- Quarta e quinta: só depois das 18h (por causa de plantão em outro local).
-- Demais dias: horário a definir por local (perguntar à Jamilly se ainda não tiver isso).
+1. **Nada do trabalho recente está commitado no git.** `git status` mostra a pasta `frontend/`
+   inteira como untracked, e `backend/app/main.py`, `config.py`, `requirements.txt`, `schema.sql`
+   como modified-não-staged. Só os `git rm` dos HTMLs antigos estão staged. **Confirme com o
+   Luiz se quer commitar antes de fazer qualquer coisa destrutiva no working tree.**
+2. **Os servidores não ficam rodando sozinhos** — precisam ser subidos manualmente a cada sessão
+   nova (comandos abaixo). Se `curl http://localhost:3000` ou `:8000/health` não responder, é
+   só isso, não é bug.
+3. Existe uma conta de teste real no banco: **email `luiz@teste.com` / senha `senha123`**.
 
-### Modalidade
-- Atende por teleconsulta (e presencial nos 2 locais).
-- Sessão individual e sessão de casal — podem ter duração e/ou valor diferentes.
+## Stack técnica (decidida e em uso, não é mais "a definir")
 
-### Autonomia do bot
-- O bot **fecha o agendamento sozinho**, sem etapa de confirmação manual da Jamilly.
-- Cada sessão é agendada **separadamente** — sem recorrência automática (cada paciente
-  tem necessidade diferente).
+- **Backend**: Python + FastAPI, em `backend/`. Conecta no Postgres via `asyncpg` (pool).
+- **Banco**: PostgreSQL no **Neon** (serverless). Connection string em `.env` → `DATABASE_URL`
+  (nunca commitado).
+- **Frontend**: Next.js 16 (App Router, Turbopack) + Tailwind v4, em `frontend/`. **Substituiu
+  completamente** o painel antigo em HTML estático (que foi deletado — `git rm`, ainda staged).
+  Exige **Node 20+** (o sistema tinha Node 18; instalamos via `nvm`, não pelo apt do sistema).
+- **Auth**: JWT em cookie httpOnly (`session`, 7 dias), senha com bcrypt. Rotas do painel
+  protegidas por `frontend/src/proxy.ts` (⚠️ no Next.js 16 o arquivo se chama `proxy.ts` e a
+  função exportada é `proxy`, não `middleware.ts`/`middleware` — API antiga foi deprecada. Isso
+  pegou a gente de surpresa uma vez, cuidado com conhecimento desatualizado sobre Next.js aqui).
+- **IA / WhatsApp**: nada disso foi implementado ainda. Ver seção "O que NÃO existe".
 
-### Situações delicadas (crise / fora do escopo)
-- O bot **não tenta responder** — acolhe brevemente com uma mensagem padrão.
-- Notifica a Jamilly imediatamente, incluindo uma **prévia da conversa** que motivou a
-  transferência.
+## Como rodar
 
-### Pagamento
-- Somente Pix ou dinheiro — sem cartão. Sem gateway de pagamento necessário no MVP.
+```bash
+# Backend
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --port 8000 --reload
 
-### Pacientes
-- Público: geralmente adultos, ou filhos de adultos.
-- Atende terapia individual e de casal.
-- Prontuário: ela já usa o Claude para registrar anotações de sessão — **não entra no MVP**,
-  fica como possibilidade futura.
+# Frontend (precisa do nvm carregado pra pegar Node 20)
+export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+cd frontend
+npm run dev
+```
 
-### LGPD
-- Consentimento explícito no cadastro do paciente (checkbox + timestamp de aceite),
-  já que é dado de saúde sensível.
+Frontend em `http://localhost:3000`, backend em `http://localhost:8000`.
+`frontend/.env.local` já tem `API_URL` e `NEXT_PUBLIC_API_URL` apontando pro backend local.
 
-## Escopo do MVP (o que construir agora)
+## Schema do banco (multi-tenant)
 
-1. Bot de agendamento no WhatsApp (IA + function calling)
-2. Agenda nativa no banco (2 locais, regras de horário por dia)
-3. Geração automática de link de teleconsulta
-4. Lembrete automático antes da sessão
-5. Escalonamento de crise (acolhimento + notificação com prévia)
-6. Consentimento LGPD no cadastro
-7. Painel web: Dashboard, Pacientes, Agenda (calendário + bloqueio de horário), Configurações
+Ver `schema.sql`. Tabela `profissionais` (login: nome, email, senha_hash) é o tenant raiz.
+Todas as outras tabelas carregam `profissional_id`: `locais`, `pacientes`, `sessoes`,
+`regras_horario`, `bloqueios_horario`, `conversas_escalonadas`. Isolamento é feito por
+`WHERE profissional_id = $1` em toda query do backend — não tem RLS do Postgres, é tudo
+aplicação.
 
-**Fora do MVP (roadmap futuro)**: prontuário com criptografia, ficha de anamnese digital,
-histórico de conversas por paciente, sessões recorrentes automáticas, lista de espera,
-controle de pagamentos/recibos, taxa de no-show.
+Detalhes que não são óbvios lendo o schema:
+- `sessoes` tem uma `EXCLUDE USING gist` que impede duas sessões sobrepostas no mesmo local
+  (testado, funciona). Precisou de um trigger (`trg_sessoes_calc_fim`) porque `timestamptz + interval`
+  não é IMMUTABLE no Postgres e não pode entrar direto numa constraint desse tipo.
+- `pacientes.telefone` é único **por profissional**, não globalmente.
+- Datas são `TIMESTAMPTZ`. O frontend converte pra horário de Brasília na hora de exibir
+  (`frontend/src/lib/format.ts`) — os dados no banco estão em UTC.
 
-## Schema do banco de dados
+## Endpoints do backend (`backend/app/main.py`)
 
-Ver `schema.sql` — tabelas: `pacientes`, `locais`, `regras_horario`, `sessoes`,
-`bloqueios_horario`, `conversas_escalonadas`.
+- `POST /auth/signup`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
+- `GET/POST /locais`
+- `GET/POST /regras-horario`, `DELETE /regras-horario/{id}`
+- `GET /pacientes` (inclui `proxima_sessao` calculada via join)
+- `GET /sessoes/hoje`, `GET /sessoes?inicio=&fim=` (aceita `date`, não string — cuidado se
+  mexer nisso, já quebrou uma vez por causa de tipagem do asyncpg)
+- `POST /sessoes`, `PATCH /sessoes/{id}` (cria/edita sessão; detecta choque de horário e
+  devolve 409)
+- `GET /dashboard/stats`
 
-## Cronograma (5 semanas — 17/07 a 21/08/2026)
+Todas as rotas de dado (exceto `/health` e `/auth/*`) exigem cookie de sessão válido.
 
-- **Semana 1**: banco de dados, backend base, integração OpenAI (com número de teste)
-- **Semana 2**: function calling (consultar/criar agendamento), regras de horário por local/dia
-- **Semana 3**: link de teleconsulta, escalonamento de crise, lembrete automático, LGPD
-- **Semana 4**: painel web (Dashboard, Pacientes, Agenda, Configurações)
-- **Semana 5**: testes end-to-end, configurar número real (Evolution API), deploy, início do piloto de 2 semanas
+## Frontend — o que existe
 
-Board completo no ClickUp: lista "Cronograma — Bot Dra. Jamilly".
+Rotas em `frontend/src/app/`:
+- `(auth)/login`, `(auth)/signup` — formulários reais, chamam o backend, sem sidebar
+- `(app)/` (Dashboard), `(app)/pacientes`, `(app)/agenda`, `(app)/configuracoes` — todas atrás
+  do proxy de auth, com sidebar
 
-## Ponto de partida desta sessão
-Começando pelo **banco de dados** — ver `schema.sql` para o modelo proposto.
+Não existem ainda: `/assistente` (bot), `/financeiro` (removido de propósito, não é mais escopo).
+
+Pontos fortes de UX já implementados:
+- Agenda: grid semanal real (não mockado), clique num espaço vazio abre modal de criar sessão,
+  clique numa sessão existente abre modal de editar/cancelar. Navegação entre semanas por
+  querystring (`?semana=YYYY-MM-DD`).
+- Configurações: cadastro de locais + grade de horário (`regras_horario`) com formulário e
+  lista com botão de remover.
+- Paleta visual: rosé/mauve + dourado, inspirada nas fotos reais do consultório da Jamilly
+  (não é mais o lilás genérico do mockup original nem o azul que foi tentado no meio do caminho
+  pra uma reunião que não avançou).
+
+## O que NÃO existe (não assuma que está pronto)
+
+- Bot do WhatsApp (Evolution API) — zero código, nem decisão de infra tomada
+- Integração com OpenAI / function calling — zero código, sem API key configurada ainda
+- Geração de link de teleconsulta
+- Lembrete automático
+- Escalonamento de crise
+- Fluxo de consentimento LGPD no cadastro (o campo existe no banco, não tem UI)
+- Tela de cadastro/edição de paciente (hoje só dá pra ver a lista; criar paciente é só via API/SQL direto)
+- Qualquer teste automatizado (unit, integração, e2e) — tudo foi validado manualmente via curl
+  e navegador até agora
+
+## Decisão em aberto
+
+Luiz perguntou sobre usar um **número BR DID** (número virtual/VoIP brasileiro) em vez do
+celular pessoal dele pra testar o WhatsApp/Evolution API — ainda não foi respondido nem decidido
+nesta sessão. Vale retomar essa conversa antes de partir pra integração do bot.
+
+## Recomendação de próximos passos
+
+1. Decidir o que fazer com o git (commitar o que está pendente, ideal antes de qualquer coisa
+   grande).
+2. Decidir sobre o número BR DID (pergunta em aberto acima).
+3. Construir a tela de cadastro/edição de paciente (falta pra fechar o CRUD básico do painel).
+4. Só depois disso entrar em WhatsApp/Evolution API + OpenAI — é a parte mais arriscada e
+   ainda não tem nenhuma base de código.

@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --color-accent: #a8768a;
+  --color-accent-dark: #8f5f73;
+  --color-accent-soft: #f3e8ec;
+  --color-bg: #ede6e1;
+  --color-bg-grad-start: #f0e9e4;
+  --color-bg-grad-end: #e3d9d3;
+  --color-card: #faf6f3;
+  --color-sidebar: #faf6f3;
+  --color-fg: #3a2f2f;
+  --color-muted: #8a7873;
+  --color-border: #ddd0c9;
+  --color-gold: #b8860b;
+  --color-gold-soft: #f5ecd6;
+  --color-shadow: rgba(90, 60, 60, 0.14);
+}
+
+.dark {
+  --color-accent: #d4a3b8;
+  --color-accent-dark: #e0b8c9;
+  --color-accent-soft: #3a2a30;
+  --color-bg: #1c1517;
+  --color-bg-grad-start: #171214;
+  --color-bg-grad-end: #211a1c;
+  --color-card: #251d20;
+  --color-sidebar: #21181b;
+  --color-fg: #f0e6e8;
+  --color-muted: #b3a0a3;
+  --color-border: #3d2e32;
+  --color-gold: #f0c766;
+  --color-gold-soft: #3a3120;
+  --color-shadow: rgba(0, 0, 0, 0.4);
+}
+
+@theme inline {
+  --color-accent: var(--color-accent);
+  --color-accent-dark: var(--color-accent-dark);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-bg: var(--color-bg);
+  --color-card: var(--color-card);
+  --color-sidebar: var(--color-sidebar);
+  --color-fg: var(--color-fg);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-gold: var(--color-gold);
+  --color-gold-soft: var(--color-gold-soft);
+  --font-sans: var(--font-nunito);
+}
+
+body {
+  background: linear-gradient(160deg, var(--color-bg-grad-start) 0%, var(--color-bg-grad-end) 100%);
+  color: var(--color-fg);
+  font-family: var(--font-sans), sans-serif;
+}

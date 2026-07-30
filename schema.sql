@@ -1,17 +1,27 @@
--- Schema inicial — Bot de agendamento + painel (Dra. Jamilly)
+-- Schema multi-tenant — Bot de agendamento + painel (SaaS multi-profissional)
 -- PostgreSQL
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+CREATE TABLE profissionais (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(150) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    senha_hash TEXT NOT NULL,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE locais (
     id SERIAL PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,           -- "Barra de São Francisco" ou "Vitória"
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+    nome VARCHAR(100) NOT NULL,
     endereco TEXT,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE regras_horario (
     id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     local_id INTEGER NOT NULL REFERENCES locais(id) ON DELETE CASCADE,
     dia_semana SMALLINT NOT NULL CHECK (dia_semana BETWEEN 0 AND 6), -- 0=domingo .. 6=sábado
     hora_inicio TIME NOT NULL,
@@ -22,8 +32,9 @@ CREATE TABLE regras_horario (
 
 CREATE TABLE pacientes (
     id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     nome VARCHAR(150) NOT NULL,
-    telefone VARCHAR(20) NOT NULL UNIQUE, -- número de WhatsApp do paciente
+    telefone VARCHAR(20) NOT NULL, -- número de WhatsApp do paciente
     email VARCHAR(150),
     tipo_atendimento VARCHAR(20) NOT NULL DEFAULT 'individual'
         CHECK (tipo_atendimento IN ('individual', 'casal')),
@@ -31,11 +42,13 @@ CREATE TABLE pacientes (
         CHECK (status IN ('ativo', 'inativo')),
     consentimento_lgpd BOOLEAN NOT NULL DEFAULT false,
     consentimento_lgpd_data TIMESTAMPTZ,
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (profissional_id, telefone)
 );
 
 CREATE TABLE sessoes (
     id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     paciente_id INTEGER NOT NULL REFERENCES pacientes(id) ON DELETE CASCADE,
     local_id INTEGER NOT NULL REFERENCES locais(id),
     data_hora TIMESTAMPTZ NOT NULL,
@@ -46,6 +59,7 @@ CREATE TABLE sessoes (
     link_teleconsulta TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'confirmada'
         CHECK (status IN ('confirmada', 'cancelada', 'concluida')),
+    observacoes TEXT,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (
@@ -68,9 +82,13 @@ CREATE TRIGGER trg_sessoes_calc_fim
 
 CREATE INDEX idx_sessoes_data_hora ON sessoes(data_hora);
 CREATE INDEX idx_sessoes_paciente ON sessoes(paciente_id);
+CREATE INDEX idx_sessoes_profissional ON sessoes(profissional_id);
+CREATE INDEX idx_pacientes_profissional ON pacientes(profissional_id);
+CREATE INDEX idx_locais_profissional ON locais(profissional_id);
 
 CREATE TABLE bloqueios_horario (
     id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     local_id INTEGER NOT NULL REFERENCES locais(id) ON DELETE CASCADE,
     data_inicio TIMESTAMPTZ NOT NULL,
     data_fim TIMESTAMPTZ NOT NULL,
@@ -80,11 +98,9 @@ CREATE TABLE bloqueios_horario (
 
 CREATE TABLE conversas_escalonadas (
     id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     paciente_id INTEGER REFERENCES pacientes(id) ON DELETE SET NULL, -- pode ser nulo se ainda não identificado
     previa_conversa TEXT NOT NULL,
     motivo VARCHAR(30) NOT NULL CHECK (motivo IN ('crise', 'fora_do_escopo')),
     notificado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Seed inicial dos 2 locais
-INSERT INTO locais (nome) VALUES ('Barra de São Francisco'), ('Vitória');
