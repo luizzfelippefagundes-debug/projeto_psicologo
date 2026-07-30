@@ -202,7 +202,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT p.id, p.nome, p.telefone, p.tipo_atendimento, p.status, p.criado_em,
+            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.status, p.criado_em,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
