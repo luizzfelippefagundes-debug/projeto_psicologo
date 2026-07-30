@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
-import { formatDataHoraBrasilia, iniciais, type Paciente } from "@/lib/format";
+import { formatDataHoraBrasilia, iniciais, labelProcedimento, PROCEDIMENTOS, type Paciente } from "@/lib/format";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -12,6 +12,7 @@ type FormState = {
   telefone: string;
   email: string;
   tipoAtendimento: "individual" | "casal";
+  tipoProcedimento: string;
   status: "ativo" | "inativo";
 };
 
@@ -21,6 +22,7 @@ function pacienteParaFormState(paciente: Paciente): FormState {
     telefone: paciente.telefone,
     email: paciente.email ?? "",
     tipoAtendimento: paciente.tipo_atendimento,
+    tipoProcedimento: paciente.tipo_procedimento ?? "",
     status: paciente.status,
   };
 }
@@ -31,6 +33,7 @@ function formStateVazio(): FormState {
     telefone: "",
     email: "",
     tipoAtendimento: "individual",
+    tipoProcedimento: "",
     status: "ativo",
   };
 }
@@ -73,6 +76,9 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
       email: form.email || null,
       tipo_atendimento: form.tipoAtendimento,
     };
+    if (form.tipoProcedimento) {
+      payload.tipo_procedimento = form.tipoProcedimento;
+    }
     if (pacienteEditando) {
       payload.status = form.status;
     }
@@ -131,7 +137,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {["Paciente", "Telefone", "Tipo", "Próxima sessão", "Status"].map((col) => (
+              {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map((col) => (
                 <th
                   key={col}
                   className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
@@ -163,6 +169,9 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
                   {p.tipo_atendimento}
                 </td>
                 <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                  {labelProcedimento(p.tipo_procedimento)}
+                </td>
+                <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
                   {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
                 </td>
                 <td className="border-b border-border px-6 py-4">
@@ -180,7 +189,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-[14px] text-muted">
+                <td colSpan={6} className="px-6 py-8 text-center text-[14px] text-muted">
                   Nenhum paciente encontrado.
                 </td>
               </tr>
@@ -237,6 +246,28 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
                 className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
               />
             </div>
+          </div>
+
+          <div className="flex flex-col">
+            <label htmlFor="tipo-procedimento" className="mb-1.5 text-sm font-semibold">
+              Tipo de procedimento
+            </label>
+            <select
+              id="tipo-procedimento"
+              required={!pacienteEditando}
+              value={form.tipoProcedimento}
+              onChange={(e) => setForm({ ...form, tipoProcedimento: e.target.value })}
+              className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+            >
+              <option value="" disabled>
+                Selecione...
+              </option>
+              {PROCEDIMENTOS.map((proc) => (
+                <option key={proc.value} value={proc.value}>
+                  {proc.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
