@@ -16,14 +16,27 @@ ser cogitado no meio do caminho mas não avançou — não é relevante pro esta
 
 ## ⚠️ Atenção antes de continuar
 
-1. **Nada do trabalho recente está commitado no git.** `git status` mostra a pasta `frontend/`
-   inteira como untracked, e `backend/app/main.py`, `config.py`, `requirements.txt`, `schema.sql`
-   como modified-não-staged. Só os `git rm` dos HTMLs antigos estão staged. **Confirme com o
-   Luiz se quer commitar antes de fazer qualquer coisa destrutiva no working tree.**
-2. **Os servidores não ficam rodando sozinhos** — precisam ser subidos manualmente a cada sessão
+1. Todo o trabalho até 2026-07-20 está commitado e no GitHub (`main`, commit `81d8749`). Se você
+   está lendo isso a partir de um clone novo, já está tudo lá — não precisa reconstruir nada.
+2. **O arquivo `.env` NÃO está no git (de propósito, tem segredo)** — se você está num ambiente
+   novo (não a mesma máquina/pasta onde isso foi construído), o repositório sozinho não é
+   suficiente pra rodar o backend. Você precisa pedir pro Luiz os valores de:
+   - `DATABASE_URL` — connection string do Postgres no Neon
+   - `JWT_SECRET` — string aleatória usada pra assinar os tokens de sessão (qualquer valor longo
+     e aleatório serve se for gerar um novo do zero, mas aí as sessões antigas de quem já logou
+     ficam inválidas)
+
+   Formato esperado do `.env` (colocar na raiz do projeto, ao lado de `schema.sql`):
+   ```
+   DATABASE_URL=postgresql://usuario:senha@host.neon.tech/dbname?sslmode=require
+   JWT_SECRET=<string aleatória longa>
+   ```
+   **Nunca peça pra colar esses valores num chat/arquivo que vá pro git.** Peça por um canal
+   direto (ex: o próprio Luiz manda por mensagem) e escreva direto no `.env` local.
+3. **Os servidores não ficam rodando sozinhos** — precisam ser subidos manualmente a cada sessão
    nova (comandos abaixo). Se `curl http://localhost:3000` ou `:8000/health` não responder, é
    só isso, não é bug.
-3. Existe uma conta de teste real no banco: **email `luiz@teste.com` / senha `senha123`**.
+4. Existe uma conta de teste real no banco: **email `luiz@teste.com` / senha `senha123`**.
 
 ## Stack técnica (decidida e em uso, não é mais "a definir")
 
