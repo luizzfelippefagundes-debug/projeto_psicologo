@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -6,6 +7,8 @@ from zoneinfo import ZoneInfo
 import resend
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 
@@ -82,12 +85,15 @@ async def enviar_email_sessao(
     </div>
     """
 
-    await asyncio.to_thread(
-        resend.Emails.send,
-        {
-            "from": settings.resend_from_email,
-            "to": paciente_email,
-            "subject": assunto,
-            "html": html,
-        },
-    )
+    try:
+        await asyncio.to_thread(
+            resend.Emails.send,
+            {
+                "from": settings.resend_from_email,
+                "to": paciente_email,
+                "subject": assunto,
+                "html": html,
+            },
+        )
+    except Exception:
+        logger.exception("Falha ao enviar email de notificação de sessão (tipo=%s)", tipo)
