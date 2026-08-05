@@ -1,10 +1,15 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { RegrasHorarioManager } from "@/components/RegrasHorarioManager";
-import { getLocais, getRegrasHorario } from "@/lib/api";
+import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
+import { getGoogleStatus, getLocais, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
-  const [locais, regras] = await Promise.all([getLocais(), getRegrasHorario()]);
+  const [locais, regras, googleStatus] = await Promise.all([
+    getLocais(),
+    getRegrasHorario(),
+    getGoogleStatus(),
+  ]);
 
   return (
     <div className="pl-12 md:pl-0">
@@ -33,6 +38,11 @@ export default async function ConfiguracoesPage() {
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Google Calendar</h2>
+        <GoogleCalendarConexao conectado={googleStatus.conectado} />
       </div>
 
       {locais.length === 0 ? (

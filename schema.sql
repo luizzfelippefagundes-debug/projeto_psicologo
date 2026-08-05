@@ -68,6 +68,7 @@ CREATE TABLE sessoes (
     status VARCHAR(20) NOT NULL DEFAULT 'confirmada'
         CHECK (status IN ('confirmada', 'cancelada', 'concluida')),
     observacoes TEXT,
+    google_event_id VARCHAR(255), -- id do evento espelhado no Google Calendar, se sincronizado
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (
@@ -97,11 +98,23 @@ CREATE INDEX idx_locais_profissional ON locais(profissional_id);
 CREATE TABLE bloqueios_horario (
     id SERIAL PRIMARY KEY,
     profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
-    local_id INTEGER NOT NULL REFERENCES locais(id) ON DELETE CASCADE,
+    local_id INTEGER REFERENCES locais(id) ON DELETE CASCADE, -- nulo = compromisso pessoal, sem local de atendimento
     data_inicio TIMESTAMPTZ NOT NULL,
     data_fim TIMESTAMPTZ NOT NULL,
     motivo VARCHAR(255),
-    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    google_event_id VARCHAR(255), -- id do evento de origem no Google Calendar (quando veio de lá)
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (profissional_id, google_event_id)
+);
+
+CREATE TABLE google_conexoes (
+    profissional_id INTEGER PRIMARY KEY REFERENCES profissionais(id) ON DELETE CASCADE,
+    refresh_token TEXT NOT NULL,
+    access_token TEXT,
+    access_token_expira_em TIMESTAMPTZ,
+    calendar_id VARCHAR(255) NOT NULL DEFAULT 'primary',
+    sync_token TEXT,
+    conectado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE conversas_escalonadas (

@@ -2,12 +2,14 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time
 
 import asyncpg
-from anthropic import AsyncAnthropic
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from google import genai
+from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import auth, db, notificacoes
+from app import auth, bot, db, google_calendar, notificacoes
 from app.config import settings
 
 
@@ -466,7 +468,7 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
                 """
                 INSERT INTO sessoes (profissional_id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, observacoes)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, data_hora, duracao_minutos, modalidade, status, observacoes
+                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes
                 """,
                 profissional_id, body.paciente_id, body.local_id, body.data_hora,
                 body.duracao_minutos, body.modalidade, body.observacoes,
@@ -491,6 +493,17 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
         local_nome=local["nome"],
         modalidade=row["modalidade"],
     )
+
+    google_event_id = await google_calendar.sincronizar_sessao_para_google(
+        profissional_id, row["id"], paciente["nome"], local["nome"],
+        row["data_hora"], row["data_hora_fim"], row["observacoes"], None,
+    )
+    if google_event_id:
+        async with db.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE sessoes SET google_event_id = $1 WHERE id = $2", google_event_id, row["id"]
+            )
+
     return dict(row)
 
 
@@ -507,7 +520,7 @@ async def editar_sessao(
 
     async with db.pool.acquire() as conn:
         atual = await conn.fetchrow(
-            "SELECT paciente_id, local_id FROM sessoes WHERE id = $1 AND profissional_id = $2",
+            "SELECT paciente_id, local_id, google_event_id FROM sessoes WHERE id = $1 AND profissional_id = $2",
             sessao_id, profissional_id,
         )
         if atual is None:
@@ -533,7 +546,7 @@ async def editar_sessao(
                     observacoes = COALESCE($6, observacoes),
                     status = COALESCE($7, status)
                 WHERE id = $8 AND profissional_id = $9
-                RETURNING id, data_hora, duracao_minutos, modalidade, status, observacoes
+                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes
                 """,
                 body.paciente_id, body.local_id, body.data_hora, body.duracao_minutos,
                 body.modalidade, body.observacoes, body.status, sessao_id, profissional_id,
@@ -551,7 +564,8 @@ async def editar_sessao(
             elif body.data_hora is not None:
                 tipo_notificacao = "reagendamento"
 
-        if tipo_notificacao and row is not None:
+        paciente = local = profissional = None
+        if row is not None:
             paciente, local, profissional = await _buscar_info_notificacao(
                 conn,
                 profissional_id,
@@ -559,7 +573,10 @@ async def editar_sessao(
                 body.local_id or atual["local_id"],
             )
 
-    if tipo_notificacao and row is not None:
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+
+    if tipo_notificacao:
         await notificacoes.enviar_email_sessao(
             tipo=tipo_notificacao,
             paciente_email=paciente["email"],
@@ -571,8 +588,20 @@ async def editar_sessao(
             modalidade=row["modalidade"],
         )
 
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+    if row["status"] == "cancelada":
+        if atual["google_event_id"]:
+            await google_calendar.remover_evento_google(profissional_id, atual["google_event_id"])
+    else:
+        novo_event_id = await google_calendar.sincronizar_sessao_para_google(
+            profissional_id, row["id"], paciente["nome"], local["nome"],
+            row["data_hora"], row["data_hora_fim"], row["observacoes"], atual["google_event_id"],
+        )
+        if novo_event_id and novo_event_id != atual["google_event_id"]:
+            async with db.pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE sessoes SET google_event_id = $1 WHERE id = $2", novo_event_id, row["id"]
+                )
+
     return dict(row)
 
 
@@ -664,23 +693,67 @@ async def assistente_chat(
             f"Histórico de sessões (mais recentes primeiro):\n{contexto_sessoes}"
         )
 
-    if not settings.anthropic_api_key:
+    if not settings.gemini_api_key:
         return {
             "resposta": (
-                "Assistente de IA ainda não está configurado (falta a chave da API da Anthropic). "
+                "Assistente de IA ainda não está configurado (falta a chave da API do Gemini). "
                 "Assim que a chave for adicionada, esta tela passa a responder de verdade."
             )
         }
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    resposta = await client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=1024,
-        system=system_prompt,
-        messages=[
-            *[{"role": m.role, "content": m.content} for m in body.historico],
-            {"role": "user", "content": body.mensagem},
-        ],
+    papel = {"user": "user", "assistant": "model"}
+    client = genai.Client(api_key=settings.gemini_api_key)
+    contents = [
+        genai_types.Content(role=papel.get(m.role, "user"), parts=[genai_types.Part.from_text(text=m.content)])
+        for m in body.historico
+    ]
+    contents.append(genai_types.Content(role="user", parts=[genai_types.Part.from_text(text=body.mensagem)]))
+
+    resposta = await client.aio.models.generate_content(
+        model="gemini-flash-latest",
+        contents=contents,
+        config=genai_types.GenerateContentConfig(system_instruction=system_prompt),
     )
-    texto = "".join(block.text for block in resposta.content if block.type == "text")
-    return {"resposta": texto}
+    return {"resposta": resposta.text or ""}
+
+
+class BotSimularBody(BaseModel):
+    telefone_paciente: str
+    mensagem: str
+    historico: list[ChatMensagem] = []
+
+
+@app.post("/bot/simular")
+async def bot_simular(
+    body: BotSimularBody, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    historico = [{"role": m.role, "content": m.content} for m in body.historico]
+    resultado = await bot.processar_mensagem(
+        profissional_id, body.telefone_paciente, body.mensagem, historico
+    )
+    return resultado
+
+
+@app.get("/google/conectar")
+async def google_conectar(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    url = google_calendar.montar_url_autorizacao(profissional_id)
+    return RedirectResponse(url)
+
+
+@app.get("/google/callback")
+async def google_callback(code: str, state: str):
+    profissional_id = int(state)
+    tokens = await google_calendar.trocar_code_por_tokens(code)
+    await google_calendar.salvar_conexao(profissional_id, tokens)
+    return RedirectResponse("http://localhost:3000/configuracoes?google=conectado")
+
+
+@app.get("/google/status")
+async def google_status(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    conexao = await google_calendar.obter_conexao(profissional_id)
+    return {"conectado": conexao is not None}
+
+
+@app.post("/google/sincronizar")
+async def google_sincronizar(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    return await google_calendar.puxar_eventos_do_google(profissional_id)

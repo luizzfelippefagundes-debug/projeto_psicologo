@@ -15,7 +15,7 @@ async function authFetch(path: string, body: Record<string, string>) {
 
   return res.json();
 }
-
+  
 export function signup(nome: string, email: string, senha: string) {
   return authFetch("/auth/signup", { nome, email, senha });
 }

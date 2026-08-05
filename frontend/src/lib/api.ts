@@ -71,3 +71,7 @@ export function getSessoesPeriodo(inicio: string, fim: string) {
 export function getRegrasHorario() {
   return apiFetch<RegraHorario[]>("/regras-horario");
 }
+
+export function getGoogleStatus() {
+  return apiFetch<{ conectado: boolean }>("/google/status");
+}
