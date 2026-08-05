@@ -794,3 +794,42 @@ async def google_status(profissional_id: int = Depends(auth.get_current_profissi
 @app.post("/google/sincronizar")
 async def google_sincronizar(profissional_id: int = Depends(auth.get_current_profissional_id)):
     return await google_calendar.puxar_eventos_do_google(profissional_id)
+
+
+@app.get("/conversas-escalonadas")
+async def listar_conversas_escalonadas(
+    apenas_pendentes: bool = True,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT c.id, c.telefone_paciente, c.previa_conversa, c.motivo, c.resolvido, c.notificado_em,
+                   p.nome AS paciente_nome
+            FROM conversas_escalonadas c
+            LEFT JOIN pacientes p ON p.id = c.paciente_id
+            WHERE c.profissional_id = $1
+            {"AND c.resolvido = false" if apenas_pendentes else ""}
+            ORDER BY c.notificado_em DESC
+            """,
+            profissional_id,
+        )
+    return [dict(row) for row in rows]
+
+
+@app.patch("/conversas-escalonadas/{conversa_id}")
+async def resolver_conversa_escalonada(
+    conversa_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE conversas_escalonadas SET resolvido = true
+            WHERE id = $1 AND profissional_id = $2
+            RETURNING id, resolvido
+            """,
+            conversa_id, profissional_id,
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Não encontrado")
+    return dict(row)

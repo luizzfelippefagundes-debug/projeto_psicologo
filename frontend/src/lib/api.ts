@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type {
+  ConversaEscalonada,
   DashboardStats,
   Local,
   Paciente,
@@ -74,4 +75,8 @@ export function getRegrasHorario() {
 
 export function getGoogleStatus() {
   return apiFetch<{ conectado: boolean }>("/google/status");
+}
+
+export function getConversasEscalonadas() {
+  return apiFetch<ConversaEscalonada[]>("/conversas-escalonadas?apenas_pendentes=true");
 }

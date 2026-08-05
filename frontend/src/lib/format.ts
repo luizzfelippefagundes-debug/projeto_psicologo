@@ -191,6 +191,16 @@ export function formatDiaMesCurto(dateISO: string): string {
   }).format(dt);
 }
 
+export type ConversaEscalonada = {
+  id: number;
+  telefone_paciente: string | null;
+  paciente_nome: string | null;
+  previa_conversa: string;
+  motivo: "crise" | "fora_do_escopo";
+  resolvido: boolean;
+  notificado_em: string;
+};
+
 export function sessaoGridPosition(isoDateTime: string, duracaoMinutos: number) {
   const { dateISO, hour, minute, weekdayIndex } = brazilParts(new Date(isoDateTime));
   const gridStartHour = 7;

@@ -122,7 +122,9 @@ CREATE TABLE conversas_escalonadas (
     id SERIAL PRIMARY KEY,
     profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     paciente_id INTEGER REFERENCES pacientes(id) ON DELETE SET NULL, -- pode ser nulo se ainda não identificado
+    telefone_paciente VARCHAR(20), -- sempre preenchido pelo bot, mesmo sem paciente_id
     previa_conversa TEXT NOT NULL,
     motivo VARCHAR(30) NOT NULL CHECK (motivo IN ('crise', 'fora_do_escopo')),
+    resolvido BOOLEAN NOT NULL DEFAULT false,
     notificado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );

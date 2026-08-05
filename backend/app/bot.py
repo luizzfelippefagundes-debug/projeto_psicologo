@@ -161,10 +161,10 @@ async def escalar_conversa(
         )
         await conn.execute(
             """
-            INSERT INTO conversas_escalonadas (profissional_id, paciente_id, previa_conversa, motivo)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO conversas_escalonadas (profissional_id, paciente_id, telefone_paciente, previa_conversa, motivo)
+            VALUES ($1, $2, $3, $4, $5)
             """,
-            profissional_id, paciente_id, resumo, motivo,
+            profissional_id, paciente_id, telefone_paciente, resumo, motivo,
         )
         profissional = await conn.fetchrow(
             "SELECT nome, email FROM profissionais WHERE id = $1", profissional_id

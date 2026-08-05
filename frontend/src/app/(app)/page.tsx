@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getDashboardStats, getMe, getSessoesHoje } from "@/lib/api";
+import { AlertaCrise } from "@/components/AlertaCrise";
+import { getConversasEscalonadas, getDashboardStats, getMe, getSessoesHoje } from "@/lib/api";
 import { formatHoraBrasilia } from "@/lib/format";
 
 export default async function DashboardPage() {
-  const [stats, sessoes, profissional] = await Promise.all([
+  const [stats, sessoes, profissional, conversasEscalonadas] = await Promise.all([
     getDashboardStats(),
     getSessoesHoje(),
     getMe(),
+    getConversasEscalonadas(),
   ]);
   const primeiroNome = profissional.nome.split(" ")[0];
 
@@ -20,6 +22,8 @@ export default async function DashboardPage() {
         </div>
         <ThemeToggle />
       </div>
+
+      <AlertaCrise conversas={conversasEscalonadas} />
 
       <div className="mb-7 grid grid-cols-2 gap-4">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">
