@@ -69,6 +69,7 @@ CREATE TABLE sessoes (
         CHECK (status IN ('confirmada', 'cancelada', 'concluida')),
     observacoes TEXT,
     google_event_id VARCHAR(255), -- id do evento espelhado no Google Calendar, se sincronizado
+    lembrete_enviado BOOLEAN NOT NULL DEFAULT false,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (

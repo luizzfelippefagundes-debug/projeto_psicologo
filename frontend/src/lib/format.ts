@@ -8,6 +8,8 @@ export type Paciente = {
   status: "ativo" | "inativo";
   criado_em: string;
   proxima_sessao: string | null;
+  consentimento_lgpd: boolean;
+  consentimento_lgpd_data: string | null;
 };
 
 export const PROCEDIMENTOS = [

@@ -5,8 +5,13 @@ import asyncpg
 from google import genai
 from google.genai import types
 
-from app import db
+from app import db, notificacoes
 from app.config import settings
+
+MENSAGEM_ACOLHIMENTO = (
+    "Entendo que isso é importante, e quero que você saiba que não está sozinho(a) nisso. "
+    "Já avisei {profissional} agora mesmo, e ela(e) vai entrar em contato com você o quanto antes."
+)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 MODELO = "gemini-flash-latest"
@@ -85,6 +90,7 @@ async def criar_agendamento(
     data_hora_str: str,
     modalidade: str = "presencial",
     duracao_minutos: int = 50,
+    consentimento_lgpd: bool = False,
 ) -> dict:
     if modalidade not in ("presencial", "teleconsulta"):
         modalidade = "presencial"
@@ -106,10 +112,16 @@ async def criar_agendamento(
             profissional_id, telefone_paciente,
         )
         if paciente is None:
+            if not consentimento_lgpd:
+                raise ValueError(
+                    "Antes de agendar, preciso do consentimento explícito do paciente pra tratar "
+                    "os dados de saúde dele conforme a LGPD. Pergunte se ele concorda, e só chame "
+                    "essa ferramenta de novo com consentimento_lgpd=true depois que ele confirmar."
+                )
             paciente = await conn.fetchrow(
                 """
-                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento)
-                VALUES ($1, $2, $3, 'individual')
+                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
+                VALUES ($1, $2, $3, 'individual', true, now())
                 RETURNING id, nome
                 """,
                 profissional_id, nome_paciente, telefone_paciente,
@@ -134,6 +146,37 @@ async def criar_agendamento(
         "data_hora": sessao["data_hora"].isoformat(),
         "modalidade": sessao["modalidade"],
     }
+
+
+async def escalar_conversa(
+    profissional_id: int, telefone_paciente: str, motivo: str, resumo: str
+) -> None:
+    if motivo not in ("crise", "fora_do_escopo"):
+        motivo = "fora_do_escopo"
+
+    async with db.pool.acquire() as conn:
+        paciente_id = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
+            profissional_id, telefone_paciente,
+        )
+        await conn.execute(
+            """
+            INSERT INTO conversas_escalonadas (profissional_id, paciente_id, previa_conversa, motivo)
+            VALUES ($1, $2, $3, $4)
+            """,
+            profissional_id, paciente_id, resumo, motivo,
+        )
+        profissional = await conn.fetchrow(
+            "SELECT nome, email FROM profissionais WHERE id = $1", profissional_id
+        )
+
+    await notificacoes.enviar_alerta_crise(
+        profissional_email=profissional["email"],
+        profissional_nome=profissional["nome"],
+        motivo=motivo,
+        resumo_conversa=resumo,
+        telefone_paciente=telefone_paciente,
+    )
 
 
 TOOLS = types.Tool(function_declarations=[
@@ -168,8 +211,36 @@ TOOLS = types.Tool(function_declarations=[
                 "data_hora": {"type": "string", "description": "Data e hora no formato YYYY-MM-DDTHH:MM"},
                 "modalidade": {"type": "string", "enum": ["presencial", "teleconsulta"]},
                 "duracao_minutos": {"type": "integer"},
+                "consentimento_lgpd": {
+                    "type": "boolean",
+                    "description": (
+                        "Só true se for a primeira sessão desse paciente E ele já confirmou "
+                        "explicitamente que concorda com o tratamento dos dados de saúde dele "
+                        "conforme a LGPD. Pra pacientes que já têm cadastro, não precisa disso."
+                    ),
+                },
             },
             "required": ["nome_paciente", "local_nome", "data_hora"],
+        },
+    ),
+    types.FunctionDeclaration(
+        name="acolher_e_escalar",
+        description=(
+            "Use quando o paciente relatar uma situação de crise (risco a si ou a terceiros, "
+            "desespero agudo, etc.) ou pedir algo fora do escopo de um bot de agendamento (ex: "
+            "orientação clínica, diagnóstico, aconselhamento). NÃO tente ajudar, aconselhar ou "
+            "resolver — apenas chame esta ferramenta pra acolher e notificar a profissional."
+        ),
+        parametersJsonSchema={
+            "type": "object",
+            "properties": {
+                "motivo": {"type": "string", "enum": ["crise", "fora_do_escopo"]},
+                "resumo": {
+                    "type": "string",
+                    "description": "Breve resumo do que o paciente disse, pra dar contexto à profissional.",
+                },
+            },
+            "required": ["motivo", "resumo"],
         },
     ),
 ])
@@ -197,8 +268,15 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
                 entrada["data_hora"],
                 entrada.get("modalidade", "presencial"),
                 entrada.get("duracao_minutos", 50),
+                entrada.get("consentimento_lgpd", False),
             )
             return f"Agendamento criado com sucesso: {resultado}"
+
+        if nome == "acolher_e_escalar":
+            await escalar_conversa(
+                profissional_id, telefone_paciente, entrada["motivo"], entrada["resumo"]
+            )
+            return "ESCALADO"
 
         return f"Ferramenta desconhecida: {nome}"
     except ValueError as e:
@@ -243,7 +321,12 @@ async def processar_mensagem(
         f"Locais de atendimento disponíveis: {nomes_locais}.\n"
         "Sempre use consultar_horarios_disponiveis antes de oferecer um horário — nunca invente. "
         "Só use criar_agendamento depois que o paciente confirmar explicitamente um horário oferecido. "
-        "Se faltar informação (local, data, nome do paciente), pergunte antes de usar as ferramentas."
+        "Se faltar informação (local, data, nome do paciente), pergunte antes de usar as ferramentas. "
+        "Se for a primeira sessão de um paciente novo, pergunte explicitamente se ele concorda com o "
+        "tratamento dos dados de saúde dele conforme a LGPD antes de chamar criar_agendamento, e só "
+        "passe consentimento_lgpd=true depois que ele confirmar.\n"
+        "Se o paciente relatar uma situação de crise ou pedir algo fora do escopo de agendamento "
+        "(conselho clínico, diagnóstico, etc.), NÃO tente ajudar — chame acolher_e_escalar imediatamente."
     )
 
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -267,6 +350,13 @@ async def processar_mensagem(
             resultado = await _executar_ferramenta(
                 profissional_id, telefone_paciente, chamada.name, chamada.args
             )
+            if chamada.name == "acolher_e_escalar" and resultado == "ESCALADO":
+                # Mensagem fixa, não deixamos o modelo gerar a resposta numa situação sensível
+                acoes.append(f"Escalado para a profissional (motivo: {chamada.args.get('motivo')})")
+                return {
+                    "resposta": MENSAGEM_ACOLHIMENTO.format(profissional=profissional["nome"]),
+                    "acoes": acoes,
+                }
             if chamada.name == "criar_agendamento" and not resultado.startswith("Erro:"):
                 acoes.append(resultado)
             partes_resultado.append(

@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
-import { formatDataHoraBrasilia, iniciais, labelProcedimento, PROCEDIMENTOS, type Paciente } from "@/lib/format";
+import {
+  formatDataHoraBrasilia,
+  iniciais,
+  labelProcedimento,
+  PROCEDIMENTOS,
+  type Paciente,
+} from "@/lib/format";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -14,6 +20,7 @@ type FormState = {
   tipoAtendimento: "individual" | "casal";
   tipoProcedimento: string;
   status: "ativo" | "inativo";
+  consentimentoLgpd: boolean;
 };
 
 function pacienteParaFormState(paciente: Paciente): FormState {
@@ -24,6 +31,7 @@ function pacienteParaFormState(paciente: Paciente): FormState {
     tipoAtendimento: paciente.tipo_atendimento,
     tipoProcedimento: paciente.tipo_procedimento ?? "",
     status: paciente.status,
+    consentimentoLgpd: paciente.consentimento_lgpd,
   };
 }
 
@@ -35,6 +43,7 @@ function formStateVazio(): FormState {
     tipoAtendimento: "individual",
     tipoProcedimento: "",
     status: "ativo",
+    consentimentoLgpd: false,
   };
 }
 
@@ -75,6 +84,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
       telefone: form.telefone,
       email: form.email || null,
       tipo_atendimento: form.tipoAtendimento,
+      consentimento_lgpd: form.consentimentoLgpd,
     };
     if (form.tipoProcedimento) {
       payload.tipo_procedimento = form.tipoProcedimento;
@@ -319,6 +329,28 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
               </div>
             )}
           </div>
+
+          {pacienteEditando?.consentimento_lgpd ? (
+            <p className="text-[13px] text-muted">
+              ✓ Consentimento LGPD registrado em{" "}
+              {pacienteEditando.consentimento_lgpd_data &&
+                formatDataHoraBrasilia(pacienteEditando.consentimento_lgpd_data)}
+            </p>
+          ) : (
+            <label className="flex items-start gap-2.5 text-[13.5px]">
+              <input
+                type="checkbox"
+                required
+                checked={form.consentimentoLgpd}
+                onChange={(e) => setForm({ ...form, consentimentoLgpd: e.target.checked })}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+              />
+              <span>
+                O paciente consentiu explicitamente com o tratamento dos seus dados de saúde,
+                conforme a LGPD.
+              </span>
+            </label>
+          )}
 
           {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
 

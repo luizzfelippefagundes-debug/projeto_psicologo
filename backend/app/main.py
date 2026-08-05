@@ -1,3 +1,5 @@
+import asyncio
+import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time
 
@@ -9,14 +11,16 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import auth, bot, db, google_calendar, notificacoes
+from app import auth, bot, db, google_calendar, lembretes, notificacoes
 from app.config import settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    tarefa_lembretes = asyncio.create_task(lembretes.loop_lembretes())
     yield
+    tarefa_lembretes.cancel()
     await db.disconnect()
 
 
@@ -207,6 +211,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
         rows = await conn.fetch(
             """
             SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento, p.status, p.criado_em,
+                   p.consentimento_lgpd, p.consentimento_lgpd_data,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
@@ -238,6 +243,7 @@ class PacienteBody(BaseModel):
     email: EmailStr | None = None
     tipo_atendimento: str = "individual"
     tipo_procedimento: str
+    consentimento_lgpd: bool = False
 
 
 class PacienteUpdateBody(BaseModel):
@@ -247,6 +253,7 @@ class PacienteUpdateBody(BaseModel):
     tipo_atendimento: str | None = None
     tipo_procedimento: str | None = None
     status: str | None = None
+    consentimento_lgpd: bool | None = None
 
 
 @app.post("/pacientes", status_code=status.HTTP_201_CREATED)
@@ -255,6 +262,11 @@ async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_atendimento inválido")
     if body.tipo_procedimento not in TIPOS_PROCEDIMENTO:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tipo_procedimento inválido")
+    if not body.consentimento_lgpd:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Consentimento LGPD é obrigatório pra cadastrar um paciente",
+        )
 
     async with db.pool.acquire() as conn:
         existente = await conn.fetchval(
@@ -268,9 +280,13 @@ async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth
 
         row = await conn.fetchrow(
             """
-            INSERT INTO pacientes (profissional_id, nome, telefone, email, tipo_atendimento, tipo_procedimento)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em
+            INSERT INTO pacientes (
+                profissional_id, nome, telefone, email, tipo_atendimento, tipo_procedimento,
+                consentimento_lgpd, consentimento_lgpd_data
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, true, now())
+            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em,
+                      consentimento_lgpd, consentimento_lgpd_data
             """,
             profissional_id, body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento,
         )
@@ -315,12 +331,18 @@ async def editar_paciente(
                 email = COALESCE($3, email),
                 tipo_atendimento = COALESCE($4, tipo_atendimento),
                 tipo_procedimento = COALESCE($5, tipo_procedimento),
-                status = COALESCE($6, status)
+                status = COALESCE($6, status),
+                consentimento_lgpd = COALESCE($9, consentimento_lgpd),
+                consentimento_lgpd_data = CASE
+                    WHEN $9 = true AND consentimento_lgpd_data IS NULL THEN now()
+                    ELSE consentimento_lgpd_data
+                END
             WHERE id = $7 AND profissional_id = $8
-            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em
+            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em,
+                      consentimento_lgpd, consentimento_lgpd_data
             """,
             body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento, body.status,
-            paciente_id, profissional_id,
+            paciente_id, profissional_id, body.consentimento_lgpd,
         )
     return dict(row)
 
@@ -331,7 +353,7 @@ async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.g
         row = await conn.fetchrow(
             """
             SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento,
-                   p.status, p.criado_em,
+                   p.status, p.criado_em, p.consentimento_lgpd, p.consentimento_lgpd_data,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
@@ -436,6 +458,10 @@ class SessaoUpdateBody(BaseModel):
     notificar: bool = True
 
 
+def _gerar_link_teleconsulta() -> str:
+    return f"https://meet.jit.si/consulta-{secrets.token_urlsafe(9)}"
+
+
 async def _validar_paciente_e_local(conn, profissional_id: int, paciente_id: int, local_id: int):
     paciente = await conn.fetchval(
         "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
@@ -461,17 +487,19 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
     if body.modalidade not in ("presencial", "teleconsulta"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="modalidade inválida")
 
+    link_teleconsulta = _gerar_link_teleconsulta() if body.modalidade == "teleconsulta" else None
+
     async with db.pool.acquire() as conn:
         await _validar_paciente_e_local(conn, profissional_id, body.paciente_id, body.local_id)
         try:
             row = await conn.fetchrow(
                 """
-                INSERT INTO sessoes (profissional_id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, observacoes)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes
+                INSERT INTO sessoes (profissional_id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, observacoes, link_teleconsulta)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes, link_teleconsulta
                 """,
                 profissional_id, body.paciente_id, body.local_id, body.data_hora,
-                body.duracao_minutos, body.modalidade, body.observacoes,
+                body.duracao_minutos, body.modalidade, body.observacoes, link_teleconsulta,
             )
         except asyncpg.exceptions.ExclusionViolationError:
             raise HTTPException(
@@ -492,6 +520,7 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
         duracao_minutos=row["duracao_minutos"],
         local_nome=local["nome"],
         modalidade=row["modalidade"],
+        link_teleconsulta=row["link_teleconsulta"],
     )
 
     google_event_id = await google_calendar.sincronizar_sessao_para_google(
@@ -520,7 +549,7 @@ async def editar_sessao(
 
     async with db.pool.acquire() as conn:
         atual = await conn.fetchrow(
-            "SELECT paciente_id, local_id, google_event_id FROM sessoes WHERE id = $1 AND profissional_id = $2",
+            "SELECT paciente_id, local_id, google_event_id, modalidade, link_teleconsulta FROM sessoes WHERE id = $1 AND profissional_id = $2",
             sessao_id, profissional_id,
         )
         if atual is None:
@@ -534,6 +563,11 @@ async def editar_sessao(
                 body.local_id or atual["local_id"],
             )
 
+        nova_modalidade = body.modalidade or atual["modalidade"]
+        novo_link_teleconsulta = None
+        if nova_modalidade == "teleconsulta" and not atual["link_teleconsulta"]:
+            novo_link_teleconsulta = _gerar_link_teleconsulta()
+
         try:
             row = await conn.fetchrow(
                 """
@@ -544,12 +578,14 @@ async def editar_sessao(
                     duracao_minutos = COALESCE($4, duracao_minutos),
                     modalidade = COALESCE($5, modalidade),
                     observacoes = COALESCE($6, observacoes),
-                    status = COALESCE($7, status)
+                    status = COALESCE($7, status),
+                    link_teleconsulta = COALESCE($10, link_teleconsulta)
                 WHERE id = $8 AND profissional_id = $9
-                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes
+                RETURNING id, data_hora, data_hora_fim, duracao_minutos, modalidade, status, observacoes, link_teleconsulta
                 """,
                 body.paciente_id, body.local_id, body.data_hora, body.duracao_minutos,
                 body.modalidade, body.observacoes, body.status, sessao_id, profissional_id,
+                novo_link_teleconsulta,
             )
         except asyncpg.exceptions.ExclusionViolationError:
             raise HTTPException(
@@ -586,6 +622,7 @@ async def editar_sessao(
             duracao_minutos=row["duracao_minutos"],
             local_nome=local["nome"],
             modalidade=row["modalidade"],
+            link_teleconsulta=row["link_teleconsulta"],
         )
 
     if row["status"] == "cancelada":
