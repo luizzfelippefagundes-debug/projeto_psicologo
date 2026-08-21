@@ -47,6 +47,16 @@ export type SessaoHistorico = {
 export type DashboardStats = {
   consultas_hoje: number;
   pacientes_ativos: number;
+  novos_pacientes_30d: number;
+  sessoes_mes: number;
+};
+
+export type DashboardAnalytics = {
+  sessoes_por_dia_semana: { dia_semana: number; total: number }[];
+  sessoes_por_modalidade: { presencial: number; teleconsulta: number };
+  sessoes_por_status: { confirmada: number; concluida: number; cancelada: number };
+  novos_pacientes_por_semana: { semana_inicio: string; total: number }[];
+  periodo_dias: number;
 };
 
 export type Local = {

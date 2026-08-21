@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDataHoraBrasilia, type ConversaEscalonada } from "@/lib/format";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
 export function AlertaCrise({ conversas }: { conversas: ConversaEscalonada[] }) {
   const router = useRouter();

@@ -1,15 +1,23 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AlertaCrise } from "@/components/AlertaCrise";
-import { getConversasEscalonadas, getDashboardStats, getMe, getSessoesHoje } from "@/lib/api";
+import { DashboardCharts } from "@/components/DashboardCharts";
+import {
+  getConversasEscalonadas,
+  getDashboardAnalytics,
+  getDashboardStats,
+  getMe,
+  getSessoesHoje,
+} from "@/lib/api";
 import { formatHoraBrasilia } from "@/lib/format";
 
 export default async function DashboardPage() {
-  const [stats, sessoes, profissional, conversasEscalonadas] = await Promise.all([
+  const [stats, sessoes, profissional, conversasEscalonadas, analytics] = await Promise.all([
     getDashboardStats(),
     getSessoesHoje(),
     getMe(),
     getConversasEscalonadas(),
+    getDashboardAnalytics(),
   ]);
   const primeiroNome = profissional.nome.split(" ")[0];
 
@@ -25,7 +33,7 @@ export default async function DashboardPage() {
 
       <AlertaCrise conversas={conversasEscalonadas} />
 
-      <div className="mb-7 grid grid-cols-2 gap-4">
+      <div className="mb-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">
           <div className="text-[13px] font-semibold text-muted">Consultas hoje</div>
           <div className="mt-2 text-[26px] font-extrabold">{stats.consultas_hoje}</div>
@@ -34,7 +42,17 @@ export default async function DashboardPage() {
           <div className="text-[13px] font-semibold text-muted">Pacientes ativos</div>
           <div className="mt-2 text-[26px] font-extrabold">{stats.pacientes_ativos}</div>
         </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">
+          <div className="text-[13px] font-semibold text-muted">Novos pacientes (30 dias)</div>
+          <div className="mt-2 text-[26px] font-extrabold">{stats.novos_pacientes_30d}</div>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">
+          <div className="text-[13px] font-semibold text-muted">Sessões neste mês</div>
+          <div className="mt-2 text-[26px] font-extrabold">{stats.sessoes_mes}</div>
+        </div>
       </div>
+
+      <DashboardCharts analytics={analytics} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
@@ -79,8 +97,8 @@ export default async function DashboardPage() {
             </Link>
           </div>
           <p className="text-[13.5px] text-muted">
-            O bot ainda não está conectado — assim que o WhatsApp e a IA entrarem no ar, a
-            atividade real aparece aqui.
+            O bot já está ativo e agenda consultas automaticamente. Acompanhe conversas
+            simuladas e escalonamentos de crise na página do assistente.
           </p>
         </div>
       </div>

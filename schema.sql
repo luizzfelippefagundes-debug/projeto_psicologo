@@ -8,6 +8,7 @@ CREATE TABLE profissionais (
     nome VARCHAR(150) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     senha_hash TEXT NOT NULL,
+    whatsapp_instance VARCHAR(100) UNIQUE, -- nome da instância na Evolution API, preenchido ao parear o número
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -127,4 +128,15 @@ CREATE TABLE conversas_escalonadas (
     motivo VARCHAR(30) NOT NULL CHECK (motivo IN ('crise', 'fora_do_escopo')),
     resolvido BOOLEAN NOT NULL DEFAULT false,
     notificado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- histórico de conversa do bot por paciente, usado para dar contexto entre mensagens
+-- recebidas via webhook real (diferente do /bot/simular, que recebe o histórico do frontend)
+CREATE TABLE bot_conversas (
+    id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+    telefone_paciente VARCHAR(20) NOT NULL,
+    historico JSONB NOT NULL DEFAULT '[]'::jsonb, -- lista de {role, content}, limitada nas últimas N mensagens
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (profissional_id, telefone_paciente)
 );

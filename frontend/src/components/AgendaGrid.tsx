@@ -11,7 +11,7 @@ import {
   type SessaoPeriodo,
 } from "@/lib/format";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 const HORAS = Array.from({ length: 14 }, (_, i) => 7 + i); // 07:00 .. 20:00
 
 function pad2(n: number) {

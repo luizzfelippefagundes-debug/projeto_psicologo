@@ -1,18 +1,22 @@
 import asyncio
+import json
+import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time
 
 import asyncpg
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import auth, bot, db, google_calendar, lembretes, notificacoes
+from app import auth, bot, db, evolution, google_calendar, lembretes, notificacoes
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -28,7 +32,11 @@ app = FastAPI(title="Bot de Agendamento — API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://frontend-theta-weld-74.vercel.app",
+    ],
+    allow_origin_regex=r"https://frontend-.*-luiz-felippe-silva-fagundes-projects\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,7 +49,10 @@ def set_session_cookie(response: Response, profissional_id: int) -> None:
         key=auth.COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite="lax",
+        # cross-site (Vercel + backend em outro domínio) só aceita cookie com SameSite=None,
+        # que por sua vez exige Secure=True — local sem Docker usa Lax/http normalmente
+        samesite="none" if settings.cookie_cross_site else "lax",
+        secure=settings.cookie_cross_site,
         max_age=int(auth.EXPIRES_IN.total_seconds()),
         path="/",
     )
@@ -144,7 +155,7 @@ async def criar_local(body: LocalBody, profissional_id: int = Depends(auth.get_c
 
 class RegraHorarioBody(BaseModel):
     local_id: int
-    dia_semana: int
+    dias_semana: list[int]
     hora_inicio: time
     hora_fim: time
 
@@ -170,7 +181,10 @@ async def listar_regras_horario(profissional_id: int = Depends(auth.get_current_
 async def criar_regra_horario(
     body: RegraHorarioBody, profissional_id: int = Depends(auth.get_current_profissional_id)
 ):
-    if not (0 <= body.dia_semana <= 6):
+    dias = sorted(set(body.dias_semana))
+    if not dias:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selecione ao menos um dia")
+    if any(not (0 <= dia <= 6) for dia in dias):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="dia_semana deve ser entre 0 e 6")
     if body.hora_inicio >= body.hora_fim:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="hora_inicio deve ser antes de hora_fim")
@@ -182,15 +196,19 @@ async def criar_regra_horario(
         if local is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local não encontrado")
 
-        row = await conn.fetchrow(
-            """
-            INSERT INTO regras_horario (profissional_id, local_id, dia_semana, hora_inicio, hora_fim)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, local_id, dia_semana, hora_inicio, hora_fim, ativo
-            """,
-            profissional_id, body.local_id, body.dia_semana, body.hora_inicio, body.hora_fim,
-        )
-    return dict(row)
+        async with conn.transaction():
+            rows = [
+                await conn.fetchrow(
+                    """
+                    INSERT INTO regras_horario (profissional_id, local_id, dia_semana, hora_inicio, hora_fim)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id, local_id, dia_semana, hora_inicio, hora_fim, ativo
+                    """,
+                    profissional_id, body.local_id, dia, body.hora_inicio, body.hora_fim,
+                )
+                for dia in dias
+            ]
+    return [dict(row) for row in rows]
 
 
 @app.delete("/regras-horario/{regra_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -656,9 +674,122 @@ async def dashboard_stats(profissional_id: int = Depends(auth.get_current_profis
             "SELECT count(*) FROM pacientes WHERE profissional_id = $1 AND status = 'ativo'",
             profissional_id,
         )
+        novos_pacientes_30d = await conn.fetchval(
+            """
+            SELECT count(*) FROM pacientes
+            WHERE profissional_id = $1 AND criado_em >= now() - interval '30 days'
+            """,
+            profissional_id,
+        )
+        sessoes_mes = await conn.fetchval(
+            """
+            SELECT count(*) FROM sessoes
+            WHERE profissional_id = $1
+                AND status <> 'cancelada'
+                AND date_trunc('month', data_hora AT TIME ZONE 'America/Sao_Paulo')
+                    = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')
+            """,
+            profissional_id,
+        )
     return {
         "consultas_hoje": consultas_hoje,
         "pacientes_ativos": pacientes_ativos,
+        "novos_pacientes_30d": novos_pacientes_30d,
+        "sessoes_mes": sessoes_mes,
+    }
+
+
+PERIODOS_VALIDOS = (1, 7, 30, 90)
+
+
+@app.get("/dashboard/analytics")
+async def dashboard_analytics(
+    dias: int = 30, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    if dias not in PERIODOS_VALIDOS:
+        dias = 30
+
+    async with db.pool.acquire() as conn:
+        cutoff = await conn.fetchval(
+            """
+            SELECT CASE WHEN $1 = 1
+                THEN date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo'
+                ELSE now() - make_interval(days => $1)
+            END
+            """,
+            dias,
+        )
+
+        por_dia_semana = await conn.fetch(
+            """
+            SELECT dia.dia_semana, COALESCE(count(s.id), 0) AS total
+            FROM generate_series(0, 6) AS dia(dia_semana)
+            LEFT JOIN sessoes s
+                ON EXTRACT(DOW FROM s.data_hora AT TIME ZONE 'America/Sao_Paulo') = dia.dia_semana
+                AND s.profissional_id = $1
+                AND s.status <> 'cancelada'
+                AND s.data_hora >= $2
+            GROUP BY dia.dia_semana
+            ORDER BY dia.dia_semana
+            """,
+            profissional_id,
+            cutoff,
+        )
+        por_modalidade = await conn.fetch(
+            """
+            SELECT modalidade, count(*) AS total FROM sessoes
+            WHERE profissional_id = $1 AND status <> 'cancelada' AND data_hora >= $2
+            GROUP BY modalidade
+            """,
+            profissional_id,
+            cutoff,
+        )
+        por_status = await conn.fetch(
+            """
+            SELECT status, count(*) AS total FROM sessoes
+            WHERE profissional_id = $1 AND data_hora >= $2
+            GROUP BY status
+            """,
+            profissional_id,
+            cutoff,
+        )
+        novos_pacientes = await conn.fetch(
+            """
+            SELECT semana.inicio::date AS semana_inicio, COALESCE(count(p.id), 0) AS total
+            FROM generate_series(
+                date_trunc('week', $2 AT TIME ZONE 'America/Sao_Paulo'),
+                date_trunc('week', now() AT TIME ZONE 'America/Sao_Paulo'),
+                interval '1 week'
+            ) AS semana(inicio)
+            LEFT JOIN pacientes p
+                ON date_trunc('week', p.criado_em AT TIME ZONE 'America/Sao_Paulo') = semana.inicio
+                AND p.profissional_id = $1
+            GROUP BY semana.inicio
+            ORDER BY semana.inicio
+            """,
+            profissional_id,
+            cutoff,
+        )
+
+    modalidade_counts = {"presencial": 0, "teleconsulta": 0}
+    for r in por_modalidade:
+        modalidade_counts[r["modalidade"]] = r["total"]
+
+    status_counts = {"confirmada": 0, "concluida": 0, "cancelada": 0}
+    for r in por_status:
+        status_counts[r["status"]] = r["total"]
+
+    return {
+        "sessoes_por_dia_semana": [
+            {"dia_semana": r["dia_semana"], "total": r["total"]} for r in por_dia_semana
+        ],
+        "sessoes_por_modalidade": modalidade_counts,
+        "sessoes_por_status": status_counts,
+        "novos_pacientes_por_semana": [
+            {"semana_inicio": r["semana_inicio"].isoformat(), "total": r["total"]}
+            for r in novos_pacientes
+        ],
+        "periodo_dias": dias,
     }
 
 
@@ -769,6 +900,104 @@ async def bot_simular(
         profissional_id, body.telefone_paciente, body.mensagem, historico
     )
     return resultado
+
+
+HISTORICO_MAX_MENSAGENS = 20  # últimos N turnos (user+assistant) mantidos por conversa
+
+
+def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, bool]:
+    """Extrai (remoteJid, texto, from_me) de um payload de webhook da Evolution API.
+
+    O formato exato de aninhamento varia entre versões da Evolution API — tenta as
+    duas variações documentadas antes de desistir.
+    """
+    dados = payload.get("data") or {}
+
+    # variação A: data.key / data.message.conversation
+    chave = dados.get("key")
+    mensagem_obj = dados.get("message")
+
+    # variação B: data.message.key / data.message.message.conversation
+    if chave is None and isinstance(mensagem_obj, dict):
+        chave = mensagem_obj.get("key")
+        mensagem_obj = mensagem_obj.get("message")
+
+    if not isinstance(chave, dict) or not isinstance(mensagem_obj, dict):
+        return None, None, False
+
+    remote_jid = chave.get("remoteJid")
+    from_me = bool(chave.get("fromMe"))
+    texto = (
+        mensagem_obj.get("conversation")
+        or (mensagem_obj.get("extendedTextMessage") or {}).get("text")
+    )
+    return remote_jid, texto, from_me
+
+
+@app.post("/webhook/whatsapp")
+async def webhook_whatsapp(request: Request):
+    payload = await request.json()
+
+    if payload.get("event") not in ("messages.upsert", "MESSAGES_UPSERT"):
+        return {"status": "ignorado"}
+
+    instance = payload.get("instance")
+    remote_jid, texto, from_me = _extrair_mensagem_whatsapp(payload)
+
+    if not instance or from_me or not remote_jid or not texto:
+        return {"status": "ignorado"}
+
+    telefone_paciente = remote_jid.split("@")[0]
+
+    if settings.bot_telefones_permitidos:
+        permitidos = {t.strip() for t in settings.bot_telefones_permitidos.split(",") if t.strip()}
+        if telefone_paciente not in permitidos:
+            logger.info("Mensagem ignorada (modo teste, número fora da lista): %s", telefone_paciente)
+            return {"status": "ignorado_modo_teste"}
+
+    async with db.pool.acquire() as conn:
+        profissional_id = await conn.fetchval(
+            "SELECT id FROM profissionais WHERE whatsapp_instance = $1", instance
+        )
+        if profissional_id is None:
+            logger.warning("Webhook recebido para instância desconhecida: %s", instance)
+            return {"status": "instancia_desconhecida"}
+
+        linha = await conn.fetchrow(
+            "SELECT historico FROM bot_conversas WHERE profissional_id = $1 AND telefone_paciente = $2",
+            profissional_id, telefone_paciente,
+        )
+        historico = json.loads(linha["historico"]) if linha else []
+
+    try:
+        resultado = await bot.processar_mensagem(profissional_id, telefone_paciente, texto, historico)
+    except Exception:
+        logger.exception("Erro processando mensagem do bot (telefone=%s)", telefone_paciente)
+        return {"status": "erro"}
+
+    resposta = resultado.get("resposta") or ""
+    novo_historico = (
+        historico + [{"role": "user", "content": texto}, {"role": "assistant", "content": resposta}]
+    )[-HISTORICO_MAX_MENSAGENS:]
+
+    async with db.pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO bot_conversas (profissional_id, telefone_paciente, historico, atualizado_em)
+            VALUES ($1, $2, $3::jsonb, now())
+            ON CONFLICT (profissional_id, telefone_paciente)
+            DO UPDATE SET historico = $3::jsonb, atualizado_em = now()
+            """,
+            profissional_id, telefone_paciente, json.dumps(novo_historico),
+        )
+
+    if resposta:
+        try:
+            await evolution.enviar_mensagem_texto(instance, telefone_paciente, resposta)
+        except Exception:
+            logger.exception("Erro enviando resposta via Evolution API (telefone=%s)", telefone_paciente)
+
+    return {"status": "ok"}
 
 
 @app.get("/google/conectar")

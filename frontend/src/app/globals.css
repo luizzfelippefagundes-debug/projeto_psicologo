@@ -17,6 +17,13 @@
   --color-gold: #b8860b;
   --color-gold-soft: #f5ecd6;
   --color-shadow: rgba(90, 60, 60, 0.14);
+
+  /* Chart palette — validated with scripts/validate_palette.js against --color-card (light) */
+  --chart-blue: #2a78d6;
+  --chart-orange: #eb6834;
+  --chart-aqua: #1baf7a;
+  --chart-yellow: #eda100;
+  --chart-magenta: #e87ba4;
 }
 
 .dark {
@@ -34,6 +41,13 @@
   --color-gold: #f0c766;
   --color-gold-soft: #3a3120;
   --color-shadow: rgba(0, 0, 0, 0.4);
+
+  /* Chart palette — validated with scripts/validate_palette.js against --color-card (dark) */
+  --chart-blue: #3987e5;
+  --chart-orange: #d95926;
+  --chart-aqua: #199e70;
+  --chart-yellow: #c98500;
+  --chart-magenta: #d55181;
 }
 
 @theme inline {

@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// caminho relativo — passa pelo rewrite do Next.js (next.config.ts), fazendo o cookie
+// de sessão nascer no mesmo domínio do site (necessário quando front e back estão em
+// domínios diferentes, senão o navegador recusa o cookie em páginas renderizadas no servidor)
+const API_URL = "/api";
 
 async function authFetch(path: string, body: Record<string, string>) {
   const res = await fetch(`${API_URL}${path}`, {

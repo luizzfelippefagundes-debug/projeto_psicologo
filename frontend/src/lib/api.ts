@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type {
   ConversaEscalonada,
+  DashboardAnalytics,
   DashboardStats,
   Local,
   Paciente,
@@ -49,6 +50,10 @@ export function getSessoesHoje() {
 
 export function getDashboardStats() {
   return apiFetch<DashboardStats>("/dashboard/stats");
+}
+
+export function getDashboardAnalytics(dias: number = 30) {
+  return apiFetch<DashboardAnalytics>(`/dashboard/analytics?dias=${dias}`);
 }
 
 export type Profissional = {

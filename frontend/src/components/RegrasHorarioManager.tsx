@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DIAS_SEMANA, formatHoraCurta, type Local, type RegraHorario } from "@/lib/format";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
 export function RegrasHorarioManager({
   locais,
@@ -15,15 +15,27 @@ export function RegrasHorarioManager({
 }) {
   const router = useRouter();
   const [localId, setLocalId] = useState(String(locais[0]?.id ?? ""));
-  const [diaSemana, setDiaSemana] = useState("1");
+  const [diasSelecionados, setDiasSelecionados] = useState<number[]>([]);
   const [horaInicio, setHoraInicio] = useState("08:00");
   const [horaFim, setHoraFim] = useState("18:00");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
+  function alternarDia(dia: number) {
+    setDiasSelecionados((atual) =>
+      atual.includes(dia) ? atual.filter((d) => d !== dia) : [...atual, dia].sort(),
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErro(null);
+
+    if (diasSelecionados.length === 0) {
+      setErro("Selecione ao menos um dia.");
+      return;
+    }
+
     setCarregando(true);
 
     const res = await fetch(`${API_URL}/regras-horario`, {
@@ -32,7 +44,7 @@ export function RegrasHorarioManager({
       credentials: "include",
       body: JSON.stringify({
         local_id: Number(localId),
-        dia_semana: Number(diaSemana),
+        dias_semana: diasSelecionados,
         hora_inicio: horaInicio,
         hora_fim: horaFim,
       }),
@@ -45,6 +57,7 @@ export function RegrasHorarioManager({
       return;
     }
 
+    setDiasSelecionados([]);
     setCarregando(false);
     router.refresh();
   }
@@ -86,22 +99,53 @@ export function RegrasHorarioManager({
           </select>
         </div>
 
-        <div className="flex flex-col">
-          <label htmlFor="dia" className="mb-1.5 text-sm font-semibold">
-            Dia da semana
-          </label>
-          <select
-            id="dia"
-            value={diaSemana}
-            onChange={(e) => setDiaSemana(e.target.value)}
-            className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-          >
-            {DIAS_SEMANA.map((dia, i) => (
-              <option key={dia} value={i}>
-                {dia}
-              </option>
-            ))}
-          </select>
+        <div className="flex w-full flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Dias da semana</span>
+            <div className="flex gap-3 text-[12.5px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setDiasSelecionados([0, 1, 2, 3, 4, 5, 6])}
+                className="text-accent hover:underline"
+              >
+                Semana toda
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiasSelecionados([1, 2, 3, 4, 5])}
+                className="text-accent hover:underline"
+              >
+                Dias úteis
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiasSelecionados([])}
+                className="text-muted hover:underline"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {DIAS_SEMANA.map((dia, i) => {
+              const ativo = diasSelecionados.includes(i);
+              return (
+                <button
+                  key={dia}
+                  type="button"
+                  onClick={() => alternarDia(i)}
+                  aria-pressed={ativo}
+                  className={
+                    ativo
+                      ? "rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-bold text-white"
+                      : "rounded-full border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3.5 py-1.5 text-[13px] font-semibold text-accent-dark transition-colors hover:border-accent"
+                  }
+                >
+                  {dia.slice(0, 3)}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex flex-col">
@@ -132,10 +176,14 @@ export function RegrasHorarioManager({
 
         <button
           type="submit"
-          disabled={carregando || !localId}
+          disabled={carregando || !localId || diasSelecionados.length === 0}
           className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
         >
-          {carregando ? "Adicionando..." : "Adicionar horário"}
+          {carregando
+            ? "Adicionando..."
+            : diasSelecionados.length > 1
+              ? `Adicionar horário (${diasSelecionados.length} dias)`
+              : "Adicionar horário"}
         </button>
 
         {erro && <p className="w-full text-[13px] font-semibold text-red-600">{erro}</p>}

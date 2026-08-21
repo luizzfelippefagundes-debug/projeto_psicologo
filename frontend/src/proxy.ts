@@ -20,5 +20,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // /api/* fica de fora — é o proxy pro backend (next.config.ts), não uma página;
+  // chamada sem sessão deve virar 401 do backend, não um redirect pra tela de login
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

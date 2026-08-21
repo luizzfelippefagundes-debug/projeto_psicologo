@@ -15,8 +15,16 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8000/google/callback"
+    evolution_api_url: str = "http://evolution-api:8080"
+    evolution_api_key: str | None = None
+    # True quando front (Vercel) e back vivem em domínios diferentes (exige HTTPS de verdade).
+    # Só desativar pra rodar local sem Docker, com front e back em http://localhost.
+    cookie_cross_site: bool = True
+    # lista separada por vírgula de números liberados pro bot responder (modo teste).
+    # vazio/None = responde qualquer número (produção de verdade)
+    bot_telefones_permitidos: str | None = None
 
-    model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE)
+    model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
 
 
 settings = Settings()

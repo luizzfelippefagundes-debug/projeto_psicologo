@@ -1,0 +1,97 @@
+services:
+  # reverse proxy com HTTPS automático (Let's Encrypt) pro backend e a Evolution API
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81" # painel de administração — trocar a senha padrão no primeiro acesso
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - app-net
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    # publicada só em localhost — usada pelo cloudflared quando rodando local;
+    # numa VPS real, o Nginx Proxy Manager acessa via rede interna (backend:8000) e isso pode sair
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - app-net
+
+  evolution-postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD}
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-net
+
+  evolution-redis:
+    image: redis:latest
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - evolution_redis_data:/data
+    networks:
+      - app-net
+
+  # API do WhatsApp (self-hosted). Painel de gestão em evolution-manager.
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    restart: unless-stopped
+    depends_on:
+      - evolution-postgres
+      - evolution-redis
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${EVOLUTION_POSTGRES_PASSWORD}@evolution-postgres:5432/evolution?schema=evolution_api
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/6
+      # aponta pro nosso backend via rede interna do Docker — não precisa de HTTPS pra isso
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: http://backend:8000/webhook/whatsapp
+    # publicada em localhost pra gente conseguir chamar a API dela direto (criar instância, QR code etc.)
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - app-net
+
+  # painel web pra parear o número via QR code — só acessível via túnel SSH (não exposto)
+  evolution-manager:
+    image: evoapicloud/evolution-manager:latest
+    restart: unless-stopped
+    depends_on:
+      - evolution-api
+    ports:
+      - "127.0.0.1:3000:80"
+    networks:
+      - app-net
+
+volumes:
+  npm_data:
+  npm_letsencrypt:
+  evolution_postgres_data:
+  evolution_redis_data:
+  evolution_instances:
+
+networks:
+  app-net:
+    driver: bridge
