@@ -905,8 +905,8 @@ async def bot_simular(
 HISTORICO_MAX_MENSAGENS = 20  # últimos N turnos (user+assistant) mantidos por conversa
 
 
-def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, bool]:
-    """Extrai (remoteJid, texto, from_me) de um payload de webhook da Evolution API.
+def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, bool, str | None]:
+    """Extrai (remoteJid, texto, from_me, message_id) de um webhook da Evolution API.
 
     O formato exato de aninhamento varia entre versões da Evolution API — tenta as
     duas variações documentadas antes de desistir.
@@ -923,15 +923,16 @@ def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, b
         mensagem_obj = mensagem_obj.get("message")
 
     if not isinstance(chave, dict) or not isinstance(mensagem_obj, dict):
-        return None, None, False
+        return None, None, False, None
 
     remote_jid = chave.get("remoteJid")
     from_me = bool(chave.get("fromMe"))
+    message_id = chave.get("id")
     texto = (
         mensagem_obj.get("conversation")
         or (mensagem_obj.get("extendedTextMessage") or {}).get("text")
     )
-    return remote_jid, texto, from_me
+    return remote_jid, texto, from_me, message_id
 
 
 @app.post("/webhook/whatsapp")
@@ -942,12 +943,29 @@ async def webhook_whatsapp(request: Request):
         return {"status": "ignorado"}
 
     instance = payload.get("instance")
-    remote_jid, texto, from_me = _extrair_mensagem_whatsapp(payload)
+    remote_jid, texto, from_me, message_id = _extrair_mensagem_whatsapp(payload)
 
     if not instance or from_me or not remote_jid or not texto:
         return {"status": "ignorado"}
 
     telefone_paciente = remote_jid.split("@")[0]
+
+    if message_id:
+        async with db.pool.acquire() as conn:
+            inserida = await conn.fetchval(
+                """
+                INSERT INTO whatsapp_mensagens_processadas (message_id)
+                VALUES ($1)
+                ON CONFLICT (message_id) DO NOTHING
+                RETURNING message_id
+                """,
+                message_id,
+            )
+        if inserida is None:
+            # a Evolution API às vezes reenvia o mesmo evento de webhook — sem isso,
+            # o bot respondia a mesma mensagem mais de uma vez (visto em produção)
+            logger.info("Mensagem duplicada ignorada: %s", message_id)
+            return {"status": "duplicado"}
 
     if settings.bot_telefones_permitidos:
         permitidos = {t.strip() for t in settings.bot_telefones_permitidos.split(",") if t.strip()}

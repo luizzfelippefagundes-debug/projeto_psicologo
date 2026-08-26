@@ -140,3 +140,10 @@ CREATE TABLE bot_conversas (
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (profissional_id, telefone_paciente)
 );
+
+-- evita processar/responder duas vezes a mesma mensagem: a Evolution API às vezes
+-- reenvia o mesmo evento de webhook (visto em produção, causava resposta duplicada)
+CREATE TABLE whatsapp_mensagens_processadas (
+    message_id VARCHAR(255) PRIMARY KEY,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
