@@ -309,14 +309,17 @@ async def processar_mensagem(
         )
 
     nomes_locais = ", ".join(l["nome"] for l in locais) or "nenhum local cadastrado ainda"
-    hoje = datetime.now(BRASILIA).strftime("%Y-%m-%d (%A)")
+    agora_str = datetime.now(BRASILIA).strftime("%Y-%m-%d %H:%M (%A)")
 
     system_prompt = (
         f"Você é o assistente de agendamento de {profissional['nome']}, respondendo pelo WhatsApp "
         f"a um paciente. Seja breve, cordial e direto, em português do Brasil.\n"
-        f"Hoje é {hoje}.\n"
+        f"Agora é {agora_str} (horário de Brasília).\n"
         f"Locais de atendimento disponíveis: {nomes_locais}.\n"
-        "Sempre use consultar_horarios_disponiveis antes de oferecer um horário — nunca invente. "
+        "Sempre use consultar_horarios_disponiveis antes de oferecer um horário — nunca invente e "
+        "nunca reaproveite uma lista de horários que você já deu antes na conversa, mesmo que seja "
+        "pra mesma data: o tempo passa e outros pacientes podem ter agendado nesse meio tempo, "
+        "então chame a ferramenta de novo a cada vez que o paciente perguntar sobre disponibilidade. "
         "Só use criar_agendamento depois que o paciente confirmar explicitamente um horário oferecido. "
         "Se faltar informação (local, data, nome do paciente), pergunte antes de usar as ferramentas. "
         "Se for a primeira sessão de um paciente novo, pergunte explicitamente se ele concorda com o "
