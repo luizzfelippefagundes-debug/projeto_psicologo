@@ -68,6 +68,7 @@ async def horarios_disponiveis(
     livres: list[str] = []
     passo = timedelta(minutes=30)
     duracao = timedelta(minutes=duracao_minutos)
+    agora = datetime.now(BRASILIA)
 
     for regra in regras:
         inicio = datetime.combine(data, regra["hora_inicio"], tzinfo=BRASILIA)
@@ -75,7 +76,7 @@ async def horarios_disponiveis(
         candidato = inicio
         while candidato + duracao <= fim_janela:
             candidato_fim = candidato + duracao
-            conflito = any(
+            conflito = candidato < agora or any(
                 candidato < oc_fim and candidato_fim > oc_inicio
                 for oc_inicio, oc_fim in janelas_ocupadas
             )
