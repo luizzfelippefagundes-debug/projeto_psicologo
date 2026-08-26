@@ -1,9 +1,8 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import anthropic
 import asyncpg
-from google import genai
-from google.genai import types
 
 from app import db, notificacoes
 from app.config import settings
@@ -12,9 +11,14 @@ MENSAGEM_ACOLHIMENTO = (
     "Entendo que isso é importante, e quero que você saiba que não está sozinho(a) nisso. "
     "Já avisei {profissional} agora mesmo, e ela(e) vai entrar em contato com você o quanto antes."
 )
+MENSAGEM_ERRO_IA = (
+    "Estou com uma instabilidade técnica aqui do meu lado agora. "
+    "Pode mandar sua mensagem de novo daqui a pouco?"
+)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-MODELO = "gemini-flash-latest"
+MODELO = "claude-haiku-4-5"
+MAX_TOKENS_RESPOSTA = 1024
 MAX_RODADAS_FERRAMENTA = 4
 
 
@@ -179,15 +183,15 @@ async def escalar_conversa(
     )
 
 
-TOOLS = types.Tool(function_declarations=[
-    types.FunctionDeclaration(
-        name="consultar_horarios_disponiveis",
-        description=(
+TOOLS = [
+    {
+        "name": "consultar_horarios_disponiveis",
+        "description": (
             "Consulta os horários realmente livres para agendamento em um local, numa data "
             "específica. Sempre use esta ferramenta antes de oferecer um horário — nunca invente "
             "ou suponha disponibilidade."
         ),
-        parametersJsonSchema={
+        "input_schema": {
             "type": "object",
             "properties": {
                 "local_nome": {"type": "string", "description": "Nome do local de atendimento"},
@@ -196,14 +200,14 @@ TOOLS = types.Tool(function_declarations=[
             },
             "required": ["local_nome", "data"],
         },
-    ),
-    types.FunctionDeclaration(
-        name="criar_agendamento",
-        description=(
+    },
+    {
+        "name": "criar_agendamento",
+        "description": (
             "Cria de fato o agendamento pro paciente, depois que ele confirmou um horário "
             "que veio de consultar_horarios_disponiveis."
         ),
-        parametersJsonSchema={
+        "input_schema": {
             "type": "object",
             "properties": {
                 "nome_paciente": {"type": "string", "description": "Nome do paciente"},
@@ -222,16 +226,16 @@ TOOLS = types.Tool(function_declarations=[
             },
             "required": ["nome_paciente", "local_nome", "data_hora"],
         },
-    ),
-    types.FunctionDeclaration(
-        name="acolher_e_escalar",
-        description=(
+    },
+    {
+        "name": "acolher_e_escalar",
+        "description": (
             "Use quando o paciente relatar uma situação de crise (risco a si ou a terceiros, "
             "desespero agudo, etc.) ou pedir algo fora do escopo de um bot de agendamento (ex: "
             "orientação clínica, diagnóstico, aconselhamento). NÃO tente ajudar, aconselhar ou "
             "resolver — apenas chame esta ferramenta pra acolher e notificar a profissional."
         ),
-        parametersJsonSchema={
+        "input_schema": {
             "type": "object",
             "properties": {
                 "motivo": {"type": "string", "enum": ["crise", "fora_do_escopo"]},
@@ -242,8 +246,8 @@ TOOLS = types.Tool(function_declarations=[
             },
             "required": ["motivo", "resumo"],
         },
-    ),
-])
+    },
+]
 
 
 async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nome: str, entrada: dict) -> str:
@@ -283,21 +287,13 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
         return f"Erro: {e}"
 
 
-def _historico_para_content(historico: list[dict]) -> list[types.Content]:
-    papel = {"user": "user", "assistant": "model"}
-    return [
-        types.Content(role=papel.get(m["role"], "user"), parts=[types.Part.from_text(text=m["content"])])
-        for m in historico
-    ]
-
-
 async def processar_mensagem(
     profissional_id: int, telefone_paciente: str, mensagem: str, historico: list[dict]
 ) -> dict:
-    if not settings.gemini_api_key:
+    if not settings.anthropic_api_key:
         return {
             "resposta": (
-                "Bot ainda não está configurado (falta a chave da API do Gemini). "
+                "Bot ainda não está configurado (falta a chave da API da Anthropic). "
                 "Assim que a chave for adicionada, o agendamento por function calling funciona de verdade."
             ),
             "acoes": [],
@@ -329,40 +325,47 @@ async def processar_mensagem(
         "(conselho clínico, diagnóstico, etc.), NÃO tente ajudar — chame acolher_e_escalar imediatamente."
     )
 
-    client = genai.Client(api_key=settings.gemini_api_key)
-    config = types.GenerateContentConfig(system_instruction=system_prompt, tools=[TOOLS])
-    contents = _historico_para_content(historico)
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=mensagem)]))
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    messages = [{"role": m["role"], "content": m["content"]} for m in historico]
+    messages.append({"role": "user", "content": mensagem})
     acoes: list[str] = []
 
     for _ in range(MAX_RODADAS_FERRAMENTA):
-        resposta = await client.aio.models.generate_content(
-            model=MODELO, contents=contents, config=config
-        )
+        try:
+            resposta = await client.messages.create(
+                model=MODELO,
+                max_tokens=MAX_TOKENS_RESPOSTA,
+                system=system_prompt,
+                tools=TOOLS,
+                messages=messages,
+            )
+        except anthropic.APIError:
+            return {"resposta": MENSAGEM_ERRO_IA, "acoes": acoes}
 
-        chamadas = resposta.function_calls
+        chamadas = [b for b in resposta.content if b.type == "tool_use"]
         if not chamadas:
-            return {"resposta": resposta.text or "", "acoes": acoes}
+            texto = "".join(b.text for b in resposta.content if b.type == "text")
+            return {"resposta": texto, "acoes": acoes}
 
-        contents.append(resposta.candidates[0].content)
-        partes_resultado = []
+        messages.append({"role": "assistant", "content": resposta.content})
+        resultados_ferramenta = []
         for chamada in chamadas:
             resultado = await _executar_ferramenta(
-                profissional_id, telefone_paciente, chamada.name, chamada.args
+                profissional_id, telefone_paciente, chamada.name, chamada.input
             )
             if chamada.name == "acolher_e_escalar" and resultado == "ESCALADO":
                 # Mensagem fixa, não deixamos o modelo gerar a resposta numa situação sensível
-                acoes.append(f"Escalado para a profissional (motivo: {chamada.args.get('motivo')})")
+                acoes.append(f"Escalado para a profissional (motivo: {chamada.input.get('motivo')})")
                 return {
                     "resposta": MENSAGEM_ACOLHIMENTO.format(profissional=profissional["nome"]),
                     "acoes": acoes,
                 }
             if chamada.name == "criar_agendamento" and not resultado.startswith("Erro:"):
                 acoes.append(resultado)
-            partes_resultado.append(
-                types.Part.from_function_response(name=chamada.name, response={"resultado": resultado})
+            resultados_ferramenta.append(
+                {"type": "tool_result", "tool_use_id": chamada.id, "content": resultado}
             )
-        contents.append(types.Content(role="user", parts=partes_resultado))
+        messages.append({"role": "user", "content": resultados_ferramenta})
 
     return {
         "resposta": "Desculpa, não consegui concluir agora — pode tentar reformular seu pedido?",

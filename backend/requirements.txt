@@ -6,5 +6,6 @@ bcrypt
 pyjwt
 pydantic[email]
 google-genai
+anthropic
 resend
 httpx
