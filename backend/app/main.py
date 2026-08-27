@@ -918,13 +918,16 @@ def _lock_da_conversa(profissional_id: int, telefone_paciente: str) -> asyncio.L
     return _locks_conversa[chave]
 
 
-def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, bool, str | None]:
-    """Extrai (remoteJid, texto, from_me, message_id) de um webhook da Evolution API.
+def _extrair_mensagem_whatsapp(
+    payload: dict,
+) -> tuple[str | None, str | None, bool, str | None, str | None]:
+    """Extrai (remoteJid, texto, from_me, message_id, push_name) de um webhook da Evolution API.
 
     O formato exato de aninhamento varia entre versões da Evolution API — tenta as
     duas variações documentadas antes de desistir.
     """
     dados = payload.get("data") or {}
+    push_name = dados.get("pushName")
 
     # variação A: data.key / data.message.conversation
     chave = dados.get("key")
@@ -936,7 +939,7 @@ def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, b
         mensagem_obj = mensagem_obj.get("message")
 
     if not isinstance(chave, dict) or not isinstance(mensagem_obj, dict):
-        return None, None, False, None
+        return None, None, False, None, push_name
 
     remote_jid = chave.get("remoteJid")
     from_me = bool(chave.get("fromMe"))
@@ -945,7 +948,7 @@ def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, b
         mensagem_obj.get("conversation")
         or (mensagem_obj.get("extendedTextMessage") or {}).get("text")
     )
-    return remote_jid, texto, from_me, message_id
+    return remote_jid, texto, from_me, message_id, push_name
 
 
 @app.post("/webhook/whatsapp")
@@ -956,7 +959,7 @@ async def webhook_whatsapp(request: Request):
         return {"status": "ignorado"}
 
     instance = payload.get("instance")
-    remote_jid, texto, from_me, message_id = _extrair_mensagem_whatsapp(payload)
+    remote_jid, texto, from_me, message_id, push_name = _extrair_mensagem_whatsapp(payload)
 
     if not instance or from_me or not remote_jid or not texto:
         return {"status": "ignorado"}
@@ -1019,12 +1022,15 @@ async def webhook_whatsapp(request: Request):
         async with db.pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO bot_conversas (profissional_id, telefone_paciente, historico, atualizado_em)
-                VALUES ($1, $2, $3::jsonb, now())
+                INSERT INTO bot_conversas (profissional_id, telefone_paciente, nome_whatsapp, historico, atualizado_em)
+                VALUES ($1, $2, $3, $4::jsonb, now())
                 ON CONFLICT (profissional_id, telefone_paciente)
-                DO UPDATE SET historico = $3::jsonb, atualizado_em = now()
+                DO UPDATE SET
+                    historico = $4::jsonb,
+                    nome_whatsapp = COALESCE($3, bot_conversas.nome_whatsapp),
+                    atualizado_em = now()
                 """,
-                profissional_id, telefone_paciente, json.dumps(novo_historico),
+                profissional_id, telefone_paciente, push_name, json.dumps(novo_historico),
             )
 
     if resposta:
