@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import anthropic
 import asyncpg
 
-from app import anamnese, db, notificacoes
+from app import anamnese, db, notificacoes, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,90 @@ async def criar_agendamento(
         "data_hora": sessao["data_hora"].astimezone(BRASILIA).strftime("%d/%m/%Y %H:%M"),
         "modalidade": sessao["modalidade"],
     }
+
+
+async def segurar_horario(
+    profissional_id: int,
+    nome_paciente: str,
+    telefone_paciente: str,
+    local_nome: str,
+    data_hora_str: str,
+    modalidade: str = "presencial",
+    duracao_minutos: int = 50,
+    consentimento_lgpd: bool = False,
+    data_nascimento_str: str | None = None,
+) -> dict:
+    if modalidade not in ("presencial", "teleconsulta"):
+        modalidade = "presencial"
+
+    data_hora = datetime.fromisoformat(data_hora_str)
+    if data_hora.tzinfo is None:
+        data_hora = data_hora.replace(tzinfo=BRASILIA)
+
+    data_nascimento = date.fromisoformat(data_nascimento_str) if data_nascimento_str else None
+    expira_em = reservas.calcular_expiracao_hold()
+
+    async with db.pool.acquire() as conn:
+        local = await _buscar_local(conn, profissional_id, local_nome)
+        paciente = await _buscar_ou_criar_paciente(
+            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd, data_nascimento
+        )
+
+        try:
+            sessao = await conn.fetchrow(
+                """
+                INSERT INTO sessoes (profissional_id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, status, expira_em)
+                VALUES ($1, $2, $3, $4, $5, $6, 'reservado', $7)
+                RETURNING id, data_hora, duracao_minutos, modalidade, status
+                """,
+                profissional_id, paciente["id"], local["id"], data_hora, duracao_minutos, modalidade, expira_em,
+            )
+        except asyncpg.exceptions.ExclusionViolationError:
+            raise ValueError("Esse horário acabou de ser ocupado por outra sessão. Escolha outro horário.")
+
+    # Nada de anamnese/email de confirmação aqui de propósito — isso só dispara quando
+    # o hold vira confirmado de verdade, em confirmar_horario_reservado. Mandar antes
+    # seria enviar formulário/email pra uma reserva que pode nem virar consulta.
+    return {
+        "sessao_id": sessao["id"],
+        "paciente": paciente["nome"],
+        "local": local["nome"],
+        "data_hora": sessao["data_hora"].astimezone(BRASILIA).strftime("%d/%m/%Y %H:%M"),
+        "modalidade": sessao["modalidade"],
+        "expira_em": expira_em.strftime("%H:%M"),
+    }
+
+
+async def entrar_lista_espera(
+    profissional_id: int, telefone_paciente: str, nome_paciente: str, local_nome: str, periodo_preferido: str,
+) -> None:
+    if periodo_preferido not in ("manha", "tarde", "qualquer"):
+        periodo_preferido = "qualquer"
+
+    async with db.pool.acquire() as conn:
+        local = await _buscar_local(conn, profissional_id, local_nome)
+
+        existente = await conn.fetchval(
+            """
+            SELECT id FROM lista_espera
+            WHERE profissional_id = $1 AND local_id = $2 AND paciente_telefone = $3 AND atendido_em IS NULL
+            """,
+            profissional_id, local["id"], telefone_paciente,
+        )
+        if existente:
+            await conn.execute(
+                "UPDATE lista_espera SET periodo_preferido = $1 WHERE id = $2",
+                periodo_preferido, existente,
+            )
+            return
+
+        await conn.execute(
+            """
+            INSERT INTO lista_espera (profissional_id, local_id, paciente_telefone, paciente_nome, periodo_preferido)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            profissional_id, local["id"], telefone_paciente, nome_paciente, periodo_preferido,
+        )
 
 
 async def escalar_conversa(
