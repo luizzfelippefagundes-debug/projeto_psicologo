@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import auth, bot, db, evolution, google_calendar, lembretes, notificacoes
+from app import anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -500,9 +500,14 @@ async def _validar_paciente_e_local(conn, profissional_id: int, paciente_id: int
 
 
 async def _buscar_info_notificacao(conn, profissional_id: int, paciente_id: int, local_id: int):
-    paciente = await conn.fetchrow("SELECT nome, email FROM pacientes WHERE id = $1", paciente_id)
+    paciente = await conn.fetchrow(
+        "SELECT nome, email, telefone, tipo_procedimento, data_nascimento FROM pacientes WHERE id = $1",
+        paciente_id,
+    )
     local = await conn.fetchrow("SELECT nome FROM locais WHERE id = $1", local_id)
-    profissional = await conn.fetchrow("SELECT nome FROM profissionais WHERE id = $1", profissional_id)
+    profissional = await conn.fetchrow(
+        "SELECT nome, whatsapp_instance FROM profissionais WHERE id = $1", profissional_id
+    )
     return paciente, local, profissional
 
 
@@ -545,6 +550,15 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
         local_nome=local["nome"],
         modalidade=row["modalidade"],
         link_teleconsulta=row["link_teleconsulta"],
+    )
+
+    await anamnese.enviar_anamnese(
+        paciente_email=paciente["email"],
+        paciente_telefone=paciente["telefone"],
+        paciente_nome=paciente["nome"],
+        tipo_procedimento=paciente["tipo_procedimento"],
+        data_nascimento=paciente["data_nascimento"],
+        whatsapp_instance=profissional["whatsapp_instance"],
     )
 
     google_event_id = await google_calendar.sincronizar_sessao_para_google(
