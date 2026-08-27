@@ -164,6 +164,11 @@ export function getTodayISO(): string {
   return brazilParts(new Date()).dateISO;
 }
 
+export function getAgoraBrasilia(): { hour: number; minute: number } {
+  const { hour, minute } = brazilParts(new Date());
+  return { hour, minute };
+}
+
 export function addDaysISO(dateISO: string, days: number): string {
   const [y, m, d] = dateISO.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
@@ -180,7 +185,7 @@ export function getWeekStart(referenceISODate?: string): string {
 }
 
 export function getWeekDates(mondayISO: string): string[] {
-  return Array.from({ length: 7 }, (_, i) => addDaysISO(mondayISO, i));
+  return Array.from({ length: 5 }, (_, i) => addDaysISO(mondayISO, i));
 }
 
 export function formatDiaSemanaCurto(dateISO: string): string {
