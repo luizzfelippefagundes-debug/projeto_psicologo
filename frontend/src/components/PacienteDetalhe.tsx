@@ -17,6 +17,7 @@ const STATUS_SESSAO_LABEL: Record<string, string> = {
   confirmada: "Confirmada",
   concluida: "Concluída",
   cancelada: "Cancelada",
+  reservado: "Reservado (bot)",
 };
 
 export function PacienteDetalhe({
@@ -132,7 +133,9 @@ export function PacienteDetalhe({
                         ? "bg-accent-soft text-accent-dark"
                         : s.status === "concluida"
                           ? "bg-black/5 text-muted"
-                          : "bg-red-500/10 text-red-600"
+                          : s.status === "reservado"
+                            ? "bg-gold-soft text-gold"
+                            : "bg-red-500/10 text-red-600"
                     }`}
                   >
                     {STATUS_SESSAO_LABEL[s.status]}

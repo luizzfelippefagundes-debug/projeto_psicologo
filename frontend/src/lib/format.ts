@@ -40,7 +40,7 @@ export type SessaoHistorico = {
   data_hora: string;
   duracao_minutos: number;
   modalidade: "presencial" | "teleconsulta";
-  status: "confirmada" | "concluida" | "cancelada";
+  status: "confirmada" | "concluida" | "cancelada" | "reservado";
   observacoes: string | null;
   local_nome: string;
 };

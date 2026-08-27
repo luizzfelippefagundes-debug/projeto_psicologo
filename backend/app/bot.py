@@ -260,6 +260,18 @@ async def segurar_horario(
             conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd, data_nascimento
         )
 
+        # Cancela qualquer hold anterior ainda ativo desse paciente antes de criar um novo —
+        # sem isso, se ele hesitasse mais de uma vez na mesma conversa, cada hesitação criava
+        # um hold zumbi ocupando um horário diferente até expirar sozinho à toa.
+        zumbi_cancelado = await conn.fetchrow(
+            """
+            UPDATE sessoes SET status = 'cancelada'
+            WHERE paciente_id = $1 AND status = 'reservado'
+            RETURNING local_id, data_hora, duracao_minutos
+            """,
+            paciente["id"],
+        )
+
         try:
             sessao = await conn.fetchrow(
                 """
@@ -271,6 +283,12 @@ async def segurar_horario(
             )
         except asyncpg.exceptions.ExclusionViolationError:
             raise ValueError("Esse horário acabou de ser ocupado por outra sessão. Escolha outro horário.")
+
+    # Libera o horário do hold zumbi cancelado acima pra quem estiver na lista de espera dele.
+    if zumbi_cancelado is not None:
+        await reservas.checar_lista_espera(
+            profissional_id, zumbi_cancelado["local_id"], zumbi_cancelado["data_hora"], zumbi_cancelado["duracao_minutos"]
+        )
 
     # Nada de anamnese/email de confirmação aqui de propósito — isso só dispara quando
     # o hold vira confirmado de verdade, em confirmar_horario_reservado. Mandar antes
