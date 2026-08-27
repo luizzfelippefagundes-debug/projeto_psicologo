@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import timedelta, timezone, datetime
 
-from app import db, notificacoes
+from app import anamnese, db, notificacoes
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,9 @@ async def verificar_e_enviar_lembretes() -> None:
         sessoes = await conn.fetch(
             """
             SELECT s.id, s.data_hora, s.duracao_minutos, s.modalidade, s.link_teleconsulta,
-                   p.nome AS paciente_nome, p.email AS paciente_email,
-                   l.nome AS local_nome, pr.nome AS profissional_nome
+                   p.nome AS paciente_nome, p.email AS paciente_email, p.telefone AS paciente_telefone,
+                   p.tipo_procedimento, p.data_nascimento,
+                   l.nome AS local_nome, pr.nome AS profissional_nome, pr.whatsapp_instance
             FROM sessoes s
             JOIN pacientes p ON p.id = s.paciente_id
             JOIN locais l ON l.id = s.local_id
@@ -44,6 +45,14 @@ async def verificar_e_enviar_lembretes() -> None:
                 local_nome=sessao["local_nome"],
                 modalidade=sessao["modalidade"],
                 link_teleconsulta=sessao["link_teleconsulta"],
+            )
+            await anamnese.enviar_anamnese(
+                paciente_email=sessao["paciente_email"],
+                paciente_telefone=sessao["paciente_telefone"],
+                paciente_nome=sessao["paciente_nome"],
+                tipo_procedimento=sessao["tipo_procedimento"],
+                data_nascimento=sessao["data_nascimento"],
+                whatsapp_instance=sessao["whatsapp_instance"],
             )
             await conn.execute("UPDATE sessoes SET lembrete_enviado = true WHERE id = $1", sessao["id"])
             logger.info("Lembrete enviado pra sessão %s", sessao["id"])
