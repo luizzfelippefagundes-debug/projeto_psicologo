@@ -1106,3 +1106,22 @@ async def resolver_conversa_escalonada(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Não encontrado")
     return dict(row)
+
+
+@app.get("/contatos-bot")
+async def listar_contatos_bot(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT bc.telefone_paciente, bc.nome_whatsapp, bc.atualizado_em
+            FROM bot_conversas bc
+            WHERE bc.profissional_id = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM pacientes p
+                WHERE p.profissional_id = bc.profissional_id AND p.telefone = bc.telefone_paciente
+              )
+            ORDER BY bc.atualizado_em DESC
+            """,
+            profissional_id,
+        )
+    return [dict(row) for row in rows]
