@@ -904,6 +904,19 @@ async def bot_simular(
 
 HISTORICO_MAX_MENSAGENS = 20  # últimos N turnos (user+assistant) mantidos por conversa
 
+# Lock por paciente: garante que duas mensagens do mesmo telefone nunca sejam
+# processadas em paralelo (a Evolution API às vezes dispara webhooks quase
+# simultâneos) — sem isso, duas requisições concorrentes podem ler o mesmo
+# histórico e uma sobrescrever o turno da outra ao salvar.
+_locks_conversa: dict[str, asyncio.Lock] = {}
+
+
+def _lock_da_conversa(profissional_id: int, telefone_paciente: str) -> asyncio.Lock:
+    chave = f"{profissional_id}:{telefone_paciente}"
+    if chave not in _locks_conversa:
+        _locks_conversa[chave] = asyncio.Lock()
+    return _locks_conversa[chave]
+
 
 def _extrair_mensagem_whatsapp(payload: dict) -> tuple[str | None, str | None, bool, str | None]:
     """Extrai (remoteJid, texto, from_me, message_id) de um webhook da Evolution API.
@@ -977,37 +990,42 @@ async def webhook_whatsapp(request: Request):
         profissional_id = await conn.fetchval(
             "SELECT id FROM profissionais WHERE whatsapp_instance = $1", instance
         )
-        if profissional_id is None:
-            logger.warning("Webhook recebido para instância desconhecida: %s", instance)
-            return {"status": "instancia_desconhecida"}
+    if profissional_id is None:
+        logger.warning("Webhook recebido para instância desconhecida: %s", instance)
+        return {"status": "instancia_desconhecida"}
 
-        linha = await conn.fetchrow(
-            "SELECT historico FROM bot_conversas WHERE profissional_id = $1 AND telefone_paciente = $2",
-            profissional_id, telefone_paciente,
-        )
-        historico = json.loads(linha["historico"]) if linha else []
+    # Trava por paciente: se duas mensagens do mesmo telefone chegarem quase juntas
+    # (a Evolution API às vezes dispara webhooks assim), processa uma de cada vez —
+    # senão as duas leriam o mesmo histórico e uma sobrescreveria o turno da outra.
+    async with _lock_da_conversa(profissional_id, telefone_paciente):
+        async with db.pool.acquire() as conn:
+            linha = await conn.fetchrow(
+                "SELECT historico FROM bot_conversas WHERE profissional_id = $1 AND telefone_paciente = $2",
+                profissional_id, telefone_paciente,
+            )
+            historico = json.loads(linha["historico"]) if linha else []
 
-    try:
-        resultado = await bot.processar_mensagem(profissional_id, telefone_paciente, texto, historico)
-    except Exception:
-        logger.exception("Erro processando mensagem do bot (telefone=%s)", telefone_paciente)
-        return {"status": "erro"}
+        try:
+            resultado = await bot.processar_mensagem(profissional_id, telefone_paciente, texto, historico)
+        except Exception:
+            logger.exception("Erro processando mensagem do bot (telefone=%s)", telefone_paciente)
+            return {"status": "erro"}
 
-    resposta = resultado.get("resposta") or ""
-    novo_historico = (
-        historico + [{"role": "user", "content": texto}, {"role": "assistant", "content": resposta}]
-    )[-HISTORICO_MAX_MENSAGENS:]
+        resposta = resultado.get("resposta") or ""
+        novo_historico = (
+            historico + [{"role": "user", "content": texto}, {"role": "assistant", "content": resposta}]
+        )[-HISTORICO_MAX_MENSAGENS:]
 
-    async with db.pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO bot_conversas (profissional_id, telefone_paciente, historico, atualizado_em)
-            VALUES ($1, $2, $3::jsonb, now())
-            ON CONFLICT (profissional_id, telefone_paciente)
-            DO UPDATE SET historico = $3::jsonb, atualizado_em = now()
-            """,
-            profissional_id, telefone_paciente, json.dumps(novo_historico),
-        )
+        async with db.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO bot_conversas (profissional_id, telefone_paciente, historico, atualizado_em)
+                VALUES ($1, $2, $3::jsonb, now())
+                ON CONFLICT (profissional_id, telefone_paciente)
+                DO UPDATE SET historico = $3::jsonb, atualizado_em = now()
+                """,
+                profissional_id, telefone_paciente, json.dumps(novo_historico),
+            )
 
     if resposta:
         try:
