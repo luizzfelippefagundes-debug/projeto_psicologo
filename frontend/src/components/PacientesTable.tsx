@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
@@ -8,6 +9,7 @@ import {
   iniciais,
   labelProcedimento,
   PROCEDIMENTOS,
+  type ContatoBot,
   type Paciente,
 } from "@/lib/format";
 
@@ -47,7 +49,15 @@ function formStateVazio(): FormState {
   };
 }
 
-export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
+export function PacientesTable({
+  pacientes,
+  contatos,
+  abaAtiva,
+}: {
+  pacientes: Paciente[];
+  contatos: ContatoBot[];
+  abaAtiva: "pacientes" | "contatos";
+}) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
@@ -60,9 +70,9 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
     p.nome.toLowerCase().includes(busca.toLowerCase())
   );
 
-  function abrirCriacao() {
+  function abrirCriacao(prefill?: { nome: string; telefone: string }) {
     setPacienteEditando(null);
-    setForm(formStateVazio());
+    setForm(prefill ? { ...formStateVazio(), ...prefill } : formStateVazio());
     setErro(null);
     setModalAberto(true);
   }
@@ -122,13 +132,97 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
       <div className="mb-4 flex justify-end">
         <button
           type="button"
-          onClick={abrirCriacao}
+          onClick={() => abrirCriacao()}
           className="rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
         >
           + Novo paciente
         </button>
       </div>
 
+      <div className="mb-4 flex gap-2">
+        <Link
+          href="/pacientes?aba=pacientes"
+          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+            abaAtiva === "pacientes"
+              ? "bg-accent text-white"
+              : "border border-border bg-card text-fg"
+          }`}
+        >
+          Pacientes
+        </Link>
+        <Link
+          href="/pacientes?aba=contatos"
+          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+            abaAtiva === "contatos"
+              ? "bg-accent text-white"
+              : "border border-border bg-card text-fg"
+          }`}
+        >
+          Contatos{contatos.length > 0 ? ` (${contatos.length})` : ""}
+        </Link>
+      </div>
+
+      {abaAtiva === "contatos" ? (
+        <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
+          <div className="border-b border-border p-6">
+            <h2 className="text-[16px] font-bold">Conversaram mas não agendaram</h2>
+            <p className="mt-1 text-[13px] text-muted">
+              Pessoas que mandaram mensagem pro assistente do WhatsApp mas ainda não têm
+              agendamento.
+            </p>
+          </div>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
+                  <th
+                    key={col}
+                    className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {contatos.map((c) => (
+                <tr key={c.telefone_paciente}>
+                  <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
+                    {c.nome_whatsapp ?? "Não informado"}
+                  </td>
+                  <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                    {c.telefone_paciente}
+                  </td>
+                  <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                    {formatDataHoraBrasilia(c.atualizado_em)}
+                  </td>
+                  <td className="border-b border-border px-6 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        abrirCriacao({
+                          nome: c.nome_whatsapp ?? "",
+                          telefone: c.telefone_paciente,
+                        })
+                      }
+                      className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                    >
+                      Cadastrar como paciente
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {contatos.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
+                    Ninguém conversou com o bot ainda sem virar paciente.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
         <div className="flex items-center justify-between gap-4 border-b border-border p-6">
           <h2 className="text-[16px] font-bold">Todos os pacientes</h2>
@@ -220,6 +314,7 @@ export function PacientesTable({ pacientes }: { pacientes: Paciente[] }) {
           </tbody>
         </table>
       </div>
+      )}
 
       <Modal
         open={modalAberto}
