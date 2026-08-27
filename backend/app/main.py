@@ -246,6 +246,8 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     return [dict(row) for row in rows]
 
 
+# se mudar/remover 'reabilitacao_com_estimulacao' ou 'neuromodulacao' aqui, atualiza
+# também anamnese.PROCEDIMENTOS_COM_ANAMNESE — não é derivado automaticamente daqui
 TIPOS_PROCEDIMENTO = (
     "avaliacao_neuropsicologica",
     "terapia",

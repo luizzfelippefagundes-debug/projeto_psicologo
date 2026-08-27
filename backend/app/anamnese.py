@@ -15,9 +15,11 @@ ARQUIVO_INFANTIL = _DIR_ANEXOS / "Anamnese_tDCS_Infantil.docx"
 
 
 def _calcular_idade(data_nascimento: date, referencia: date) -> int:
+    """Idade em anos completos na data de referência (considera se o aniversário
+    deste ano já passou, comparando (mês, dia))."""
     idade = referencia.year - data_nascimento.year
     if (referencia.month, referencia.day) < (data_nascimento.month, data_nascimento.day):
-        idade -= 1
+        idade -= 1  # aniversário deste ano ainda não chegou
     return idade
 
 
@@ -78,3 +80,12 @@ async def enviar_anamnese(
             )
         except Exception:
             logger.exception("Falha ao enviar anamnese por WhatsApp (telefone=%s)", paciente_telefone)
+        return
+
+    # paciente sem email e profissional sem whatsapp_instance — precisava mandar a
+    # anamnese e não tinha por onde. Sem isso, esse caso ficava indistinguível de
+    # "enviado com sucesso" nos logs.
+    logger.warning(
+        "Anamnese necessária mas sem canal de envio disponível (paciente=%s, telefone=%s)",
+        paciente_nome, paciente_telefone,
+    )
