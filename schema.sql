@@ -68,10 +68,12 @@ CREATE TABLE sessoes (
         CHECK (modalidade IN ('presencial', 'teleconsulta')),
     link_teleconsulta TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'confirmada'
-        CHECK (status IN ('confirmada', 'cancelada', 'concluida')),
+        CHECK (status IN ('confirmada', 'reservado', 'cancelada', 'concluida')),
     observacoes TEXT,
     google_event_id VARCHAR(255), -- id do evento espelhado no Google Calendar, se sincronizado
     lembrete_enviado BOOLEAN NOT NULL DEFAULT false,
+    expira_em TIMESTAMPTZ, -- só preenchido quando status = 'reservado'; prazo do hold
+    lembrete_expiracao_enviado BOOLEAN NOT NULL DEFAULT false, -- evita mandar o aviso de hold quase expirando 2x
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (
@@ -91,6 +93,18 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_sessoes_calc_fim
     BEFORE INSERT OR UPDATE ON sessoes
     FOR EACH ROW EXECUTE FUNCTION sessoes_calc_fim();
+
+CREATE TABLE lista_espera (
+    id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+    local_id INTEGER NOT NULL REFERENCES locais(id),
+    paciente_telefone VARCHAR(20) NOT NULL,
+    paciente_nome VARCHAR(150) NOT NULL,
+    periodo_preferido VARCHAR(10) NOT NULL DEFAULT 'qualquer'
+        CHECK (periodo_preferido IN ('manha', 'tarde', 'qualquer')),
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    atendido_em TIMESTAMPTZ -- preenchido quando essa entrada foi avisada de uma vaga
+);
 
 CREATE INDEX idx_sessoes_data_hora ON sessoes(data_hora);
 CREATE INDEX idx_sessoes_paciente ON sessoes(paciente_id);
