@@ -216,6 +216,12 @@ export type ConversaEscalonada = {
   notificado_em: string;
 };
 
+export type ContatoBot = {
+  telefone_paciente: string;
+  nome_whatsapp: string | null;
+  atualizado_em: string;
+};
+
 export function sessaoGridPosition(isoDateTime: string, duracaoMinutos: number) {
   const { dateISO, hour, minute, weekdayIndex } = brazilParts(new Date(isoDateTime));
   const gridStartHour = 7;

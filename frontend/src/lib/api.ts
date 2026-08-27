@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type {
+  ContatoBot,
   ConversaEscalonada,
   DashboardAnalytics,
   DashboardStats,
@@ -84,4 +85,8 @@ export function getGoogleStatus() {
 
 export function getConversasEscalonadas() {
   return apiFetch<ConversaEscalonada[]>("/conversas-escalonadas?apenas_pendentes=true");
+}
+
+export function getContatosBot() {
+  return apiFetch<ContatoBot[]>("/contatos-bot");
 }
