@@ -148,7 +148,10 @@ async def criar_agendamento(
         "sessao_id": sessao["id"],
         "paciente": paciente["nome"],
         "local": local["nome"],
-        "data_hora": sessao["data_hora"].isoformat(),
+        # sessao["data_hora"] volta do banco em UTC — sem converter pra Brasília aqui, a IA
+        # acaba repetindo a hora UTC crua pro paciente como se fosse hora local (bug real visto
+        # em produção: agendou 11:00 mas confirmou "14:00" pro paciente)
+        "data_hora": sessao["data_hora"].astimezone(BRASILIA).strftime("%d/%m/%Y %H:%M"),
         "modalidade": sessao["modalidade"],
     }
 
