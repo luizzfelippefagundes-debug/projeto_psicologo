@@ -35,13 +35,14 @@ export default async function AgendaPage({
   const mondayISO = getWeekStart(semana);
   const weekDates = getWeekDates(mondayISO);
   const [sessoes, pacientes] = await Promise.all([
-    getSessoesPeriodo(weekDates[0], weekDates[6]),
+    getSessoesPeriodo(weekDates[0], weekDates[4]),
     getPacientes(),
   ]);
   const hojeISO = getTodayISO();
 
   const semanaAnterior = addDaysISO(mondayISO, -7);
   const proximaSemana = addDaysISO(mondayISO, 7);
+  const emSemanaAtual = mondayISO === getWeekStart();
 
   return (
     <div className="pl-12 md:pl-0">
@@ -54,17 +55,30 @@ export default async function AgendaPage({
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href={`/agenda?semana=${semanaAnterior}`}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-[13.5px] font-semibold"
+            href="/agenda"
+            aria-disabled={emSemanaAtual}
+            className={`rounded-xl border-[1.5px] border-accent px-3.5 py-2 text-[13px] font-extrabold text-accent-dark transition-opacity ${
+              emSemanaAtual ? "pointer-events-none opacity-50" : ""
+            }`}
           >
-            ← Semana anterior
+            Hoje
           </Link>
-          <Link
-            href={`/agenda?semana=${proximaSemana}`}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-[13.5px] font-semibold"
-          >
-            Próxima semana →
-          </Link>
+          <div className="flex overflow-hidden rounded-xl border border-border">
+            <Link
+              href={`/agenda?semana=${semanaAnterior}`}
+              aria-label="Semana anterior"
+              className="border-r border-border bg-card px-3 py-2 text-[16px] font-extrabold leading-none"
+            >
+              ‹
+            </Link>
+            <Link
+              href={`/agenda?semana=${proximaSemana}`}
+              aria-label="Próxima semana"
+              className="bg-card px-3 py-2 text-[16px] font-extrabold leading-none"
+            >
+              ›
+            </Link>
+          </div>
           <ThemeToggle />
         </div>
       </div>
