@@ -455,6 +455,81 @@ TOOLS = [
         },
     },
     {
+        "name": "segurar_horario",
+        "description": (
+            "Segura (reserva temporariamente) um horário pro paciente, sem confirmar de vez, "
+            "quando ele demonstra interesse num horário oferecido por consultar_horarios_disponiveis "
+            "mas ainda não confirmou de cara (ex: pediu pra pensar, disse que confirma depois). "
+            "A reserva expira sozinha ainda hoje se ele não confirmar."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nome_paciente": {"type": "string", "description": "Nome do paciente"},
+                "local_nome": {"type": "string"},
+                "data_hora": {"type": "string", "description": "Data e hora no formato YYYY-MM-DDTHH:MM"},
+                "modalidade": {"type": "string", "enum": ["presencial", "teleconsulta"]},
+                "duracao_minutos": {"type": "integer"},
+                "consentimento_lgpd": {
+                    "type": "boolean",
+                    "description": (
+                        "Só true se for a primeira sessão desse paciente E ele já confirmou "
+                        "explicitamente que concorda com o tratamento dos dados de saúde dele "
+                        "conforme a LGPD. Pra pacientes que já têm cadastro, não precisa disso."
+                    ),
+                },
+                "data_nascimento": {
+                    "type": "string",
+                    "description": (
+                        "Data de nascimento do paciente, no formato YYYY-MM-DD. Só preencha se "
+                        "for a primeira sessão de um paciente novo. Pra pacientes que já têm "
+                        "cadastro, não precisa perguntar de novo."
+                    ),
+                },
+            },
+            "required": ["nome_paciente", "local_nome", "data_hora"],
+        },
+    },
+    {
+        "name": "confirmar_horario_reservado",
+        "description": (
+            "Confirma de vez um horário que já estava reservado (segurado) nessa conversa, "
+            "convertendo a reserva numa consulta confirmada de verdade. Use quando o paciente "
+            "voltar dizendo que quer confirmar o horário que você segurou pra ele."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sessao_id": {
+                    "type": "integer",
+                    "description": "O sessao_id que veio no resultado de segurar_horario, nessa mesma conversa.",
+                },
+            },
+            "required": ["sessao_id"],
+        },
+    },
+    {
+        "name": "entrar_lista_espera",
+        "description": (
+            "Coloca o paciente na lista de espera de um local, quando não há horário bom "
+            "disponível pro que ele quer. Ele é avisado automaticamente por WhatsApp assim que "
+            "um horário compatível abrir (por cancelamento de outra sessão, por exemplo)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nome_paciente": {"type": "string", "description": "Nome do paciente"},
+                "local_nome": {"type": "string"},
+                "periodo_preferido": {
+                    "type": "string",
+                    "enum": ["manha", "tarde", "qualquer"],
+                    "description": "Período do dia que o paciente prefere, ou 'qualquer' se não tiver preferência.",
+                },
+            },
+            "required": ["nome_paciente", "local_nome", "periodo_preferido"],
+        },
+    },
+    {
         "name": "acolher_e_escalar",
         "description": (
             "Use quando o paciente relatar uma situação de crise (risco a si ou a terceiros, "
@@ -511,6 +586,33 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
                 entrada.get("data_nascimento"),
             )
             return f"Agendamento criado com sucesso: {resultado}"
+
+        if nome == "segurar_horario":
+            resultado = await segurar_horario(
+                profissional_id,
+                entrada["nome_paciente"],
+                telefone_paciente,
+                entrada["local_nome"],
+                entrada["data_hora"],
+                entrada.get("modalidade", "presencial"),
+                entrada.get("duracao_minutos", 50),
+                entrada.get("consentimento_lgpd", False),
+                entrada.get("data_nascimento"),
+            )
+            return f"Horário reservado com sucesso: {resultado}"
+
+        if nome == "confirmar_horario_reservado":
+            resultado = await confirmar_horario_reservado(
+                profissional_id, telefone_paciente, entrada["sessao_id"]
+            )
+            return f"Reserva confirmada com sucesso: {resultado}"
+
+        if nome == "entrar_lista_espera":
+            await entrar_lista_espera(
+                profissional_id, telefone_paciente, entrada["nome_paciente"],
+                entrada["local_nome"], entrada["periodo_preferido"],
+            )
+            return "Paciente adicionado à lista de espera com sucesso."
 
         if nome == "acolher_e_escalar":
             await escalar_conversa(
@@ -620,7 +722,8 @@ async def processar_mensagem(
                     "resposta": MENSAGEM_ACOLHIMENTO.format(profissional=profissional["nome"]),
                     "acoes": acoes,
                 }
-            if chamada.name == "criar_agendamento" and not resultado.startswith("Erro:"):
+            if chamada.name in ("criar_agendamento", "segurar_horario", "confirmar_horario_reservado") \
+                    and not resultado.startswith("Erro:"):
                 acoes.append(resultado)
             resultados_ferramenta.append(
                 {"type": "tool_result", "tool_use_id": chamada.id, "content": resultado}
