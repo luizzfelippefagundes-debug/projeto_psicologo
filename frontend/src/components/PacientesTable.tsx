@@ -49,6 +49,183 @@ function formStateVazio(): FormState {
   };
 }
 
+function ContatosCard({
+  contatos,
+  onCadastrar,
+}: {
+  contatos: ContatoBot[];
+  onCadastrar: (contato: ContatoBot) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
+      <div className="border-b border-border p-6">
+        <h2 className="text-[16px] font-bold">Conversaram mas não agendaram</h2>
+        <p className="mt-1 text-[13px] text-muted">
+          Pessoas que mandaram mensagem pro assistente do WhatsApp mas ainda não têm
+          agendamento.
+        </p>
+      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
+              <th
+                key={col}
+                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+              >
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {contatos.map((c) => (
+            <tr key={c.telefone_paciente}>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
+                {c.nome_whatsapp ?? "Não informado"}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {c.telefone_paciente}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {formatDataHoraBrasilia(c.atualizado_em)}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-right">
+                <button
+                  type="button"
+                  onClick={() => onCadastrar(c)}
+                  className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                >
+                  Cadastrar como paciente
+                </button>
+              </td>
+            </tr>
+          ))}
+          {contatos.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
+                Ninguém conversou com o bot ainda.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PacientesCard({
+  pacientes,
+  busca,
+  onBuscaChange,
+  onSelecionar,
+  onEditar,
+}: {
+  pacientes: Paciente[];
+  busca: string;
+  onBuscaChange: (busca: string) => void;
+  onSelecionar: (paciente: Paciente) => void;
+  onEditar: (paciente: Paciente) => void;
+}) {
+  const filtrados = pacientes.filter((p) =>
+    p.nome.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
+      <div className="flex items-center justify-between gap-4 border-b border-border p-6">
+        <h2 className="text-[16px] font-bold">Todos os pacientes</h2>
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-accent-soft px-3 py-2 text-[14px]">
+          🔍
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => onBuscaChange(e.target.value)}
+            placeholder="Buscar paciente..."
+            className="bg-transparent outline-none placeholder:text-muted"
+          />
+        </div>
+      </div>
+
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map((col) => (
+              <th
+                key={col}
+                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+              >
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtrados.map((p) => (
+            <tr
+              key={p.id}
+              onClick={() => onSelecionar(p)}
+              className="cursor-pointer hover:bg-accent-soft/40"
+            >
+              <td className="border-b border-border px-6 py-4 text-[14.5px] last:border-0">
+                <div className="flex items-center gap-3 font-bold">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-extrabold text-accent-dark">
+                    {iniciais(p.nome)}
+                  </div>
+                  {p.nome}
+                </div>
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {p.telefone}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] capitalize">
+                {p.tipo_atendimento}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {labelProcedimento(p.tipo_procedimento)}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
+              </td>
+              <td className="border-b border-border px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                      p.status === "ativo"
+                        ? "bg-accent-soft text-accent-dark"
+                        : "bg-black/5 text-muted"
+                    }`}
+                  >
+                    {p.status === "ativo" ? "Ativo" : "Inativo"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditar(p);
+                    }}
+                    aria-label="Editar paciente"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                  >
+                    ✎
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {filtrados.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-6 py-8 text-center text-[14px] text-muted">
+                Nenhum paciente encontrado.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function PacientesTable({
   pacientes,
   contatos,
@@ -65,10 +242,6 @@ export function PacientesTable({
   const [form, setForm] = useState<FormState>(formStateVazio());
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-
-  const filtrados = pacientes.filter((p) =>
-    p.nome.toLowerCase().includes(busca.toLowerCase())
-  );
 
   function abrirCriacao(prefill?: { nome: string; telefone: string }) {
     setPacienteEditando(null);
@@ -163,157 +336,20 @@ export function PacientesTable({
       </div>
 
       {abaAtiva === "contatos" ? (
-        <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-          <div className="border-b border-border p-6">
-            <h2 className="text-[16px] font-bold">Conversaram mas não agendaram</h2>
-            <p className="mt-1 text-[13px] text-muted">
-              Pessoas que mandaram mensagem pro assistente do WhatsApp mas ainda não têm
-              agendamento.
-            </p>
-          </div>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
-                  <th
-                    key={col}
-                    className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {contatos.map((c) => (
-                <tr key={c.telefone_paciente}>
-                  <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
-                    {c.nome_whatsapp ?? "Não informado"}
-                  </td>
-                  <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                    {c.telefone_paciente}
-                  </td>
-                  <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                    {formatDataHoraBrasilia(c.atualizado_em)}
-                  </td>
-                  <td className="border-b border-border px-6 py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        abrirCriacao({
-                          nome: c.nome_whatsapp ?? "",
-                          telefone: c.telefone_paciente,
-                        })
-                      }
-                      className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
-                    >
-                      Cadastrar como paciente
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {contatos.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
-                    Ninguém conversou com o bot ainda sem virar paciente.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ContatosCard
+          contatos={contatos}
+          onCadastrar={(c) =>
+            abrirCriacao({ nome: c.nome_whatsapp ?? "", telefone: c.telefone_paciente })
+          }
+        />
       ) : (
-      <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-        <div className="flex items-center justify-between gap-4 border-b border-border p-6">
-          <h2 className="text-[16px] font-bold">Todos os pacientes</h2>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-accent-soft px-3 py-2 text-[14px]">
-            🔍
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar paciente..."
-              className="bg-transparent outline-none placeholder:text-muted"
-            />
-          </div>
-        </div>
-
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map((col) => (
-                <th
-                  key={col}
-                  className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
-                >
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.map((p) => (
-              <tr
-                key={p.id}
-                onClick={() => router.push(`/pacientes/${p.id}`)}
-                className="cursor-pointer hover:bg-accent-soft/40"
-              >
-                <td className="border-b border-border px-6 py-4 text-[14.5px] last:border-0">
-                  <div className="flex items-center gap-3 font-bold">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-extrabold text-accent-dark">
-                      {iniciais(p.nome)}
-                    </div>
-                    {p.nome}
-                  </div>
-                </td>
-                <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                  {p.telefone}
-                </td>
-                <td className="border-b border-border px-6 py-4 text-[14.5px] capitalize">
-                  {p.tipo_atendimento}
-                </td>
-                <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                  {labelProcedimento(p.tipo_procedimento)}
-                </td>
-                <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                  {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
-                </td>
-                <td className="border-b border-border px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
-                        p.status === "ativo"
-                          ? "bg-accent-soft text-accent-dark"
-                          : "bg-black/5 text-muted"
-                      }`}
-                    >
-                      {p.status === "ativo" ? "Ativo" : "Inativo"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        abrirEdicao(p);
-                      }}
-                      aria-label="Editar paciente"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
-                    >
-                      ✎
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filtrados.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-[14px] text-muted">
-                  Nenhum paciente encontrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+        <PacientesCard
+          pacientes={pacientes}
+          busca={busca}
+          onBuscaChange={setBusca}
+          onSelecionar={(p) => router.push(`/pacientes/${p.id}`)}
+          onEditar={abrirEdicao}
+        />
       )}
 
       <Modal
