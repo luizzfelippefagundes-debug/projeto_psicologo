@@ -228,7 +228,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento, p.status, p.criado_em,
+            SELECT p.id, p.nome, p.telefone, p.email, p.data_nascimento, p.tipo_atendimento, p.tipo_procedimento, p.status, p.criado_em,
                    p.consentimento_lgpd, p.consentimento_lgpd_data,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
@@ -261,6 +261,7 @@ class PacienteBody(BaseModel):
     nome: str
     telefone: str
     email: EmailStr | None = None
+    data_nascimento: date | None = None
     tipo_atendimento: str = "individual"
     tipo_procedimento: str
     consentimento_lgpd: bool = False
@@ -270,6 +271,7 @@ class PacienteUpdateBody(BaseModel):
     nome: str | None = None
     telefone: str | None = None
     email: EmailStr | None = None
+    data_nascimento: date | None = None
     tipo_atendimento: str | None = None
     tipo_procedimento: str | None = None
     status: str | None = None
@@ -301,14 +303,15 @@ async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth
         row = await conn.fetchrow(
             """
             INSERT INTO pacientes (
-                profissional_id, nome, telefone, email, tipo_atendimento, tipo_procedimento,
+                profissional_id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento,
                 consentimento_lgpd, consentimento_lgpd_data
             )
-            VALUES ($1, $2, $3, $4, $5, $6, true, now())
-            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, now())
+            RETURNING id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento, status, criado_em,
                       consentimento_lgpd, consentimento_lgpd_data
             """,
-            profissional_id, body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento,
+            profissional_id, body.nome, body.telefone, body.email, body.data_nascimento,
+            body.tipo_atendimento, body.tipo_procedimento,
         )
     return dict(row)
 
@@ -356,13 +359,14 @@ async def editar_paciente(
                 consentimento_lgpd_data = CASE
                     WHEN $9 = true AND consentimento_lgpd_data IS NULL THEN now()
                     ELSE consentimento_lgpd_data
-                END
+                END,
+                data_nascimento = COALESCE($10, data_nascimento)
             WHERE id = $7 AND profissional_id = $8
-            RETURNING id, nome, telefone, email, tipo_atendimento, tipo_procedimento, status, criado_em,
+            RETURNING id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento, status, criado_em,
                       consentimento_lgpd, consentimento_lgpd_data
             """,
             body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento, body.status,
-            paciente_id, profissional_id, body.consentimento_lgpd,
+            paciente_id, profissional_id, body.consentimento_lgpd, body.data_nascimento,
         )
     return dict(row)
 
@@ -372,7 +376,7 @@ async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.g
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT p.id, p.nome, p.telefone, p.email, p.tipo_atendimento, p.tipo_procedimento,
+            SELECT p.id, p.nome, p.telefone, p.email, p.data_nascimento, p.tipo_atendimento, p.tipo_procedimento,
                    p.status, p.criado_em, p.consentimento_lgpd, p.consentimento_lgpd_data,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
