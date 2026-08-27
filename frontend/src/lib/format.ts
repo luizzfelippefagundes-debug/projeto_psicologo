@@ -3,6 +3,7 @@ export type Paciente = {
   nome: string;
   telefone: string;
   email: string | null;
+  data_nascimento: string | null;
   tipo_atendimento: "individual" | "casal";
   tipo_procedimento: string | null;
   status: "ativo" | "inativo";
