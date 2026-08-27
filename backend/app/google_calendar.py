@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -6,6 +7,8 @@ import httpx
 
 from app import db
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 
@@ -91,7 +94,17 @@ async def _access_token_valido(profissional_id: int) -> str | None:
     if conexao["access_token"] and conexao["access_token_expira_em"] and conexao["access_token_expira_em"] > agora + timedelta(minutes=1):
         return conexao["access_token"]
 
-    tokens = await _renovar_access_token(conexao["refresh_token"])
+    try:
+        tokens = await _renovar_access_token(conexao["refresh_token"])
+    except Exception:
+        # refresh_token revogado/expirado no lado do Google — sem isso, criar/editar/
+        # cancelar sessão quebrava com 500 pra qualquer profissional nessa situação,
+        # mesmo a sessão sendo criada normalmente por trás (visto em produção)
+        logger.exception(
+            "Falha ao renovar token do Google Calendar (profissional_id=%s) — sincronização pulada",
+            profissional_id,
+        )
+        return None
     expira_em = agora + timedelta(seconds=tokens.get("expires_in", 3600))
     async with db.pool.acquire() as conn:
         await conn.execute(
