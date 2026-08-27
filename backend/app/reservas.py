@@ -37,14 +37,23 @@ async def checar_lista_espera(
     periodo = "manha" if data_hora_liberada.astimezone(BRASILIA).hour < 12 else "tarde"
 
     async with db.pool.acquire() as conn:
+        # Reivindica a entrada mais antiga de forma atômica (FOR UPDATE SKIP LOCKED)
+        # antes de fazer qualquer outra coisa. Sem isso, duas chamadas concorrentes pra
+        # locais diferentes (ex: dois cancelamentos quase simultâneos) podiam ler a mesma
+        # entrada "mais antiga" antes de qualquer uma marcar atendido_em, dando dois holds
+        # pra mesma pessoa em horários diferentes e pulando quem seria o próximo da fila.
         candidato = await conn.fetchrow(
             """
-            SELECT id, paciente_telefone, paciente_nome
-            FROM lista_espera
-            WHERE profissional_id = $1 AND local_id = $2 AND atendido_em IS NULL
-              AND periodo_preferido IN ('qualquer', $3)
-            ORDER BY criado_em
-            LIMIT 1
+            UPDATE lista_espera SET atendido_em = now()
+            WHERE id = (
+                SELECT id FROM lista_espera
+                WHERE profissional_id = $1 AND local_id = $2 AND atendido_em IS NULL
+                  AND periodo_preferido IN ('qualquer', $3)
+                ORDER BY criado_em
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            RETURNING id, paciente_telefone, paciente_nome
             """,
             profissional_id, local_id, periodo,
         )
@@ -56,10 +65,14 @@ async def checar_lista_espera(
             profissional_id, candidato["paciente_telefone"],
         )
         if paciente is None:
+            # consentimento_lgpd fixo em true: entrar_lista_espera já exige consentimento
+            # explícito (ou que o paciente já exista com consentimento dado) antes de
+            # aceitar a entrada na fila — essa linha só roda pra alguém que já passou por
+            # esse gate, nunca pra um desconhecido sem consentimento.
             paciente = await conn.fetchrow(
                 """
-                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento)
-                VALUES ($1, $2, $3, 'individual')
+                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
+                VALUES ($1, $2, $3, 'individual', true, now())
                 RETURNING id
                 """,
                 profissional_id, candidato["paciente_nome"], candidato["paciente_telefone"],
@@ -75,13 +88,16 @@ async def checar_lista_espera(
                 profissional_id, paciente["id"], local_id, data_hora_liberada, duracao_minutos, expira_em,
             )
         except asyncpg.exceptions.ExclusionViolationError:
+            # Devolve a entrada pra fila (o claim lá em cima já marcou atendido_em) —
+            # senão essa pessoa perderia a vez sem ter recebido hold nenhum.
+            await conn.execute(
+                "UPDATE lista_espera SET atendido_em = NULL WHERE id = $1", candidato["id"]
+            )
             logger.warning(
                 "Não deu pra reservar horário da lista de espera pro paciente %s — horário %s já ocupado",
                 candidato["paciente_telefone"], data_hora_liberada,
             )
             return
-
-        await conn.execute("UPDATE lista_espera SET atendido_em = now() WHERE id = $1", candidato["id"])
 
         whatsapp_instance = await conn.fetchval(
             "SELECT whatsapp_instance FROM profissionais WHERE id = $1", profissional_id

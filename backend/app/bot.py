@@ -22,9 +22,14 @@ MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO = (
     "Peraí, deixa eu confirmar direitinho antes: qual horário e local você quer mesmo? "
     "Quero ter certeza de que registrei tudo certo antes de confirmar pra você."
 )
-_PALAVRAS_CONFIRMACAO = ("confirmad", "marcad", "agendad", "reservad", "segur")
+# "segur" sozinho bateria também em "seguro"/"segurança"/"assegurar" fora de contexto de
+# agendamento — por isso as conjugações de "segurar" (hold) são explícitas aqui, em vez de
+# um radical curto genérico.
+_PALAVRAS_CONFIRMACAO_FORTE = ("confirmad", "marcad", "agendad")
+_PALAVRAS_HOLD = ("segurar", "segurando", "segurei", "segurado", "segurada", "reservad")
 
-_PREFIXOS_ACAO_REAL = (
+_PREFIXOS_CONFIRMACAO_REAL = ("Agendamento criado com sucesso", "Reserva confirmada com sucesso")
+_PREFIXOS_HOLD_REAL = (
     "Agendamento criado com sucesso",
     "Horário reservado com sucesso",
     "Reserva confirmada com sucesso",
@@ -34,11 +39,26 @@ _PREFIXOS_ACAO_REAL = (
 def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
     """Detecta o modelo dizendo que um agendamento/reserva foi feito sem ter chamado a
     tool correspondente com sucesso nessa resposta — visto em produção (o bot confirmou
-    uma consulta pro paciente "Gustavo" que nunca foi criada no banco)."""
+    uma consulta pro paciente "Gustavo" que nunca foi criada no banco). Diferencia uma
+    alegação de CONFIRMAÇÃO ("confirmado"/"marcado"/"agendado" — só vale com
+    criar_agendamento ou confirmar_horario_reservado; um hold sozinho não é confirmação)
+    de uma alegação de RESERVA/HOLD ("reservado"/"segurando" etc — qualquer uma das três
+    ações reais serve, já que confirmar é uma garantia mais forte que só reservar). Sem
+    essa distinção, um hold real (segurar_horario) dava permissão pro bot dizer "confirmado"
+    sem ter confirmado de verdade."""
     texto_lower = texto.lower()
-    alegou_confirmacao = any(palavra in texto_lower for palavra in _PALAVRAS_CONFIRMACAO)
-    agendamento_real = any(a.startswith(_PREFIXOS_ACAO_REAL) for a in acoes)
-    return alegou_confirmacao and not agendamento_real
+
+    alegou_confirmacao_forte = any(p in texto_lower for p in _PALAVRAS_CONFIRMACAO_FORTE)
+    confirmacao_real = any(a.startswith(_PREFIXOS_CONFIRMACAO_REAL) for a in acoes)
+    if alegou_confirmacao_forte and not confirmacao_real:
+        return True
+
+    alegou_hold = any(p in texto_lower for p in _PALAVRAS_HOLD)
+    hold_ou_confirmacao_real = any(a.startswith(_PREFIXOS_HOLD_REAL) for a in acoes)
+    if alegou_hold and not hold_ou_confirmacao_real:
+        return True
+
+    return False
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 MODELO = "claude-haiku-4-5"
@@ -266,13 +286,31 @@ async def segurar_horario(
 
 
 async def entrar_lista_espera(
-    profissional_id: int, telefone_paciente: str, nome_paciente: str, local_nome: str, periodo_preferido: str,
+    profissional_id: int, telefone_paciente: str, nome_paciente: str, local_nome: str,
+    periodo_preferido: str, consentimento_lgpd: bool = False,
 ) -> None:
     if periodo_preferido not in ("manha", "tarde", "qualquer"):
         periodo_preferido = "qualquer"
 
     async with db.pool.acquire() as conn:
         local = await _buscar_local(conn, profissional_id, local_nome)
+
+        # Entrar na lista de espera pode criar um cadastro de paciente automaticamente
+        # depois, sem conversa nenhuma (quando um horário abrir) — por isso o consentimento
+        # LGPD precisa ser resolvido já aqui, igual toda outra ação que cria dado de saúde.
+        # Paciente que já existe e já deu consentimento antes não precisa repetir.
+        ja_consentiu = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 AND consentimento_lgpd = true",
+            profissional_id, telefone_paciente,
+        )
+        if not ja_consentiu and not consentimento_lgpd:
+            raise ValueError(
+                "Antes de colocar na lista de espera, preciso do consentimento explícito do "
+                "paciente pra tratar os dados de saúde dele conforme a LGPD, já que isso pode "
+                "gerar um cadastro automaticamente quando um horário abrir. Pergunte se ele "
+                "concorda, e só chame essa ferramenta de novo com consentimento_lgpd=true depois "
+                "que ele confirmar."
+            )
 
         existente = await conn.fetchval(
             """
@@ -537,6 +575,15 @@ TOOLS = [
                     "enum": ["manha", "tarde", "qualquer"],
                     "description": "Período do dia que o paciente prefere, ou 'qualquer' se não tiver preferência.",
                 },
+                "consentimento_lgpd": {
+                    "type": "boolean",
+                    "description": (
+                        "Só true se o paciente ainda não tem cadastro com consentimento dado E "
+                        "ele já confirmou explicitamente que concorda com o tratamento dos dados "
+                        "de saúde dele conforme a LGPD. Pra pacientes que já têm cadastro, não "
+                        "precisa disso."
+                    ),
+                },
             },
             "required": ["nome_paciente", "local_nome", "periodo_preferido"],
         },
@@ -621,6 +668,7 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
             await entrar_lista_espera(
                 profissional_id, telefone_paciente, entrada["nome_paciente"],
                 entrada["local_nome"], entrada["periodo_preferido"],
+                entrada.get("consentimento_lgpd", False),
             )
             return "Paciente adicionado à lista de espera com sucesso."
 
@@ -692,9 +740,9 @@ async def processar_mensagem(
         "- NUNCA invente urgência (frases genéricas tipo 'os horários estão acabando rápido' sem "
         "isso ser verdade). A pressão real já vem do prazo de expiração do hold e da lista de "
         "espera em si — não precisa exagerar.\n"
-        "- SEMPRE pergunte explicitamente sobre consentimento LGPD antes de chamar criar_agendamento "
-        "ou segurar_horario se for a primeira sessão de um paciente novo, e só passe "
-        "consentimento_lgpd=true depois que ele confirmar.\n"
+        "- SEMPRE pergunte explicitamente sobre consentimento LGPD antes de chamar criar_agendamento, "
+        "segurar_horario ou entrar_lista_espera se for a primeira vez desse paciente no sistema, e "
+        "só passe consentimento_lgpd=true depois que ele confirmar.\n"
         "- SEMPRE pergunte a data de nascimento do paciente (no mesmo momento em que perguntar o "
         "consentimento LGPD) se for a primeira sessão de um paciente novo, e passe em "
         "data_nascimento. Pra pacientes que já têm cadastro, não precisa perguntar de novo.\n"

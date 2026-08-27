@@ -236,7 +236,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
             FROM pacientes p
             LEFT JOIN LATERAL (
                 SELECT data_hora FROM sessoes
-                WHERE paciente_id = p.id AND status <> 'cancelada' AND data_hora >= now()
+                WHERE paciente_id = p.id AND status NOT IN ('cancelada', 'reservado') AND data_hora >= now()
                 ORDER BY data_hora ASC
                 LIMIT 1
             ) prox ON true
@@ -384,7 +384,7 @@ async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.g
             FROM pacientes p
             LEFT JOIN LATERAL (
                 SELECT data_hora FROM sessoes
-                WHERE paciente_id = p.id AND status <> 'cancelada' AND data_hora >= now()
+                WHERE paciente_id = p.id AND status NOT IN ('cancelada', 'reservado') AND data_hora >= now()
                 ORDER BY data_hora ASC
                 LIMIT 1
             ) prox ON true
@@ -693,7 +693,7 @@ async def dashboard_stats(profissional_id: int = Depends(auth.get_current_profis
         consultas_hoje = await conn.fetchval(
             """
             SELECT count(*) FROM sessoes
-            WHERE profissional_id = $1 AND data_hora::date = CURRENT_DATE AND status <> 'cancelada'
+            WHERE profissional_id = $1 AND data_hora::date = CURRENT_DATE AND status NOT IN ('cancelada', 'reservado')
             """,
             profissional_id,
         )
@@ -712,7 +712,7 @@ async def dashboard_stats(profissional_id: int = Depends(auth.get_current_profis
             """
             SELECT count(*) FROM sessoes
             WHERE profissional_id = $1
-                AND status <> 'cancelada'
+                AND status NOT IN ('cancelada', 'reservado')
                 AND date_trunc('month', data_hora AT TIME ZONE 'America/Sao_Paulo')
                     = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')
             """,
@@ -754,7 +754,7 @@ async def dashboard_analytics(
             LEFT JOIN sessoes s
                 ON EXTRACT(DOW FROM s.data_hora AT TIME ZONE 'America/Sao_Paulo') = dia.dia_semana
                 AND s.profissional_id = $1
-                AND s.status <> 'cancelada'
+                AND s.status NOT IN ('cancelada', 'reservado')
                 AND s.data_hora >= $2
             GROUP BY dia.dia_semana
             ORDER BY dia.dia_semana
@@ -765,7 +765,7 @@ async def dashboard_analytics(
         por_modalidade = await conn.fetch(
             """
             SELECT modalidade, count(*) AS total FROM sessoes
-            WHERE profissional_id = $1 AND status <> 'cancelada' AND data_hora >= $2
+            WHERE profissional_id = $1 AND status NOT IN ('cancelada', 'reservado') AND data_hora >= $2
             GROUP BY modalidade
             """,
             profissional_id,
