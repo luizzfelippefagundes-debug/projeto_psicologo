@@ -291,6 +291,63 @@ async def entrar_lista_espera(
         )
 
 
+async def confirmar_horario_reservado(profissional_id: int, telefone_paciente: str, sessao_id: int) -> dict:
+    async with db.pool.acquire() as conn:
+        # WHERE por telefone (via subquery) garante que só o dono do hold consegue
+        # confirmá-lo — sem isso, um paciente poderia adivinhar/testar sessao_id alheio.
+        sessao = await conn.fetchrow(
+            """
+            UPDATE sessoes SET status = 'confirmada'
+            WHERE id = $1 AND profissional_id = $2 AND status = 'reservado'
+              AND paciente_id = (SELECT id FROM pacientes WHERE telefone = $3 AND profissional_id = $2)
+            RETURNING id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, link_teleconsulta
+            """,
+            sessao_id, profissional_id, telefone_paciente,
+        )
+        if sessao is None:
+            raise ValueError(
+                "Esse horário reservado não existe mais, já expirou, ou não é seu. Quer que eu "
+                "consulte os horários disponíveis de novo?"
+            )
+
+        paciente = await conn.fetchrow(
+            "SELECT nome, email, telefone, tipo_procedimento, data_nascimento FROM pacientes WHERE id = $1",
+            sessao["paciente_id"],
+        )
+        local = await conn.fetchrow("SELECT nome FROM locais WHERE id = $1", sessao["local_id"])
+        profissional = await conn.fetchrow(
+            "SELECT nome, whatsapp_instance FROM profissionais WHERE id = $1", profissional_id
+        )
+
+    await notificacoes.enviar_email_sessao(
+        tipo="confirmacao",
+        paciente_email=paciente["email"],
+        paciente_nome=paciente["nome"],
+        profissional_nome=profissional["nome"],
+        data_hora=sessao["data_hora"],
+        duracao_minutos=sessao["duracao_minutos"],
+        local_nome=local["nome"],
+        modalidade=sessao["modalidade"],
+        link_teleconsulta=sessao["link_teleconsulta"],
+    )
+    await anamnese.enviar_anamnese(
+        paciente_email=paciente["email"],
+        paciente_telefone=paciente["telefone"],
+        paciente_nome=paciente["nome"],
+        tipo_procedimento=paciente["tipo_procedimento"],
+        data_nascimento=paciente["data_nascimento"],
+        whatsapp_instance=profissional["whatsapp_instance"],
+    )
+
+    return {
+        "sessao_id": sessao["id"],
+        "paciente": paciente["nome"],
+        "local": local["nome"],
+        "data_hora": sessao["data_hora"].astimezone(BRASILIA).strftime("%d/%m/%Y %H:%M"),
+        "modalidade": sessao["modalidade"],
+    }
+
+
 async def escalar_conversa(
     profissional_id: int,
     telefone_paciente: str,
