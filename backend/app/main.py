@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes
+from app import anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     await db.connect()
     tarefa_lembretes = asyncio.create_task(lembretes.loop_lembretes())
+    tarefa_holds = asyncio.create_task(reservas.loop_expiracao_holds())
     yield
     tarefa_lembretes.cancel()
+    tarefa_holds.cancel()
     await db.disconnect()
 
 
@@ -430,7 +432,7 @@ async def listar_sessoes_hoje(profissional_id: int = Depends(auth.get_current_pr
             JOIN locais l ON l.id = s.local_id
             WHERE s.profissional_id = $1
               AND s.data_hora::date = CURRENT_DATE
-              AND s.status <> 'cancelada'
+              AND s.status NOT IN ('cancelada', 'reservado')
             ORDER BY s.data_hora
             """,
             profissional_id,
@@ -454,7 +456,7 @@ async def listar_sessoes_periodo(
             JOIN locais l ON l.id = s.local_id
             WHERE s.profissional_id = $1
               AND s.data_hora::date BETWEEN $2::date AND $3::date
-              AND s.status <> 'cancelada'
+              AND s.status NOT IN ('cancelada', 'reservado')
             ORDER BY s.data_hora
             """,
             profissional_id, inicio, fim,
@@ -587,7 +589,7 @@ async def editar_sessao(
 
     async with db.pool.acquire() as conn:
         atual = await conn.fetchrow(
-            "SELECT paciente_id, local_id, google_event_id, modalidade, link_teleconsulta FROM sessoes WHERE id = $1 AND profissional_id = $2",
+            "SELECT paciente_id, local_id, google_event_id, modalidade, link_teleconsulta, status FROM sessoes WHERE id = $1 AND profissional_id = $2",
             sessao_id, profissional_id,
         )
         if atual is None:
@@ -649,6 +651,11 @@ async def editar_sessao(
 
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+
+    if body.status == "cancelada" and atual["status"] != "cancelada":
+        await reservas.checar_lista_espera(
+            profissional_id, body.local_id or atual["local_id"], row["data_hora"], row["duracao_minutos"]
+        )
 
     if tipo_notificacao:
         await notificacoes.enviar_email_sessao(
