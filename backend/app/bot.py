@@ -175,16 +175,36 @@ async def criar_agendamento(
 
 
 async def escalar_conversa(
-    profissional_id: int, telefone_paciente: str, motivo: str, resumo: str
+    profissional_id: int,
+    telefone_paciente: str,
+    motivo: str,
+    resumo: str,
+    nome_paciente: str | None = None,
 ) -> None:
     if motivo not in ("crise", "fora_do_escopo"):
         motivo = "fora_do_escopo"
 
     async with db.pool.acquire() as conn:
-        paciente_id = await conn.fetchval(
-            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
+        paciente = await conn.fetchrow(
+            "SELECT id, nome FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
             profissional_id, telefone_paciente,
         )
+        # Paciente ainda não identificado no sistema, mas deu o nome na conversa: cadastra
+        # o mínimo (sem consentimento LGPD — aqui é acolhimento de emergência, não agendamento)
+        # pra profissional ver quem é ao receber o alerta, em vez de só um número de telefone.
+        if paciente is None and nome_paciente:
+            paciente = await conn.fetchrow(
+                """
+                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento)
+                VALUES ($1, $2, $3, 'individual')
+                RETURNING id, nome
+                """,
+                profissional_id, nome_paciente, telefone_paciente,
+            )
+
+        paciente_id = paciente["id"] if paciente else None
+        nome_para_alerta = paciente["nome"] if paciente else nome_paciente
+
         await conn.execute(
             """
             INSERT INTO conversas_escalonadas (profissional_id, paciente_id, telefone_paciente, previa_conversa, motivo)
@@ -202,6 +222,7 @@ async def escalar_conversa(
         motivo=motivo,
         resumo_conversa=resumo,
         telefone_paciente=telefone_paciente,
+        paciente_nome=nome_para_alerta,
     )
 
 
@@ -265,6 +286,14 @@ TOOLS = [
                     "type": "string",
                     "description": "Breve resumo do que o paciente disse, pra dar contexto à profissional.",
                 },
+                "nome_paciente": {
+                    "type": "string",
+                    "description": (
+                        "Nome do paciente, SE ele já tiver mencionado em algum momento da conversa. "
+                        "NÃO pare pra perguntar o nome antes de escalar — isso pode atrasar o acolhimento "
+                        "numa situação de crise. Só preencha se o nome já apareceu naturalmente."
+                    ),
+                },
             },
             "required": ["motivo", "resumo"],
         },
@@ -300,7 +329,8 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
 
         if nome == "acolher_e_escalar":
             await escalar_conversa(
-                profissional_id, telefone_paciente, entrada["motivo"], entrada["resumo"]
+                profissional_id, telefone_paciente, entrada["motivo"], entrada["resumo"],
+                entrada.get("nome_paciente"),
             )
             return "ESCALADO"
 

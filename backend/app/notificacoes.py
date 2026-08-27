@@ -124,6 +124,7 @@ async def enviar_alerta_crise(
     motivo: str,
     resumo_conversa: str,
     telefone_paciente: str,
+    paciente_nome: str | None = None,
 ) -> None:
     if not settings.resend_api_key:
         logger.warning("Alerta de crise não enviado por email (Resend não configurado): %s", resumo_conversa)
@@ -131,13 +132,18 @@ async def enviar_alerta_crise(
 
     resend.api_key = settings.resend_api_key
     motivo_label = "situação de crise" if motivo == "crise" else "fora do escopo do atendimento"
+    linha_paciente = (
+        f"Paciente: {paciente_nome} ({telefone_paciente})"
+        if paciente_nome
+        else f"Paciente (telefone): {telefone_paciente}"
+    )
 
     html = f"""
     <div style="font-family: sans-serif; font-size: 15px; color: #2b2320;">
       <p>Olá, {profissional_nome}.</p>
       <p><strong>O assistente identificou uma conversa que precisa da sua atenção imediata</strong>
       ({motivo_label}).</p>
-      <p>Paciente (telefone): {telefone_paciente}</p>
+      <p>{linha_paciente}</p>
       <p style="background:#f5ecd6; padding:12px; border-radius:8px;">{resumo_conversa}</p>
       <p style="color: #8a7f78; font-size: 13px;">Mensagem automática — não responda este email.</p>
     </div>
