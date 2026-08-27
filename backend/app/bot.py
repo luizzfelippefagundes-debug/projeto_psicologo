@@ -24,14 +24,20 @@ MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO = (
 )
 _PALAVRAS_CONFIRMACAO = ("confirmad", "marcad", "agendad", "reservad")
 
+_PREFIXOS_ACAO_REAL = (
+    "Agendamento criado com sucesso",
+    "Horário reservado com sucesso",
+    "Reserva confirmada com sucesso",
+)
+
 
 def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
-    """Detecta o modelo dizendo que um agendamento foi feito sem ter chamado
-    criar_agendamento com sucesso nessa resposta — visto em produção (o bot confirmou
+    """Detecta o modelo dizendo que um agendamento/reserva foi feito sem ter chamado a
+    tool correspondente com sucesso nessa resposta — visto em produção (o bot confirmou
     uma consulta pro paciente "Gustavo" que nunca foi criada no banco)."""
     texto_lower = texto.lower()
     alegou_confirmacao = any(palavra in texto_lower for palavra in _PALAVRAS_CONFIRMACAO)
-    agendamento_real = any(a.startswith("Agendamento criado com sucesso") for a in acoes)
+    agendamento_real = any(a.startswith(_PREFIXOS_ACAO_REAL) for a in acoes)
     return alegou_confirmacao and not agendamento_real
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
