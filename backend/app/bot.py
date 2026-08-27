@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -7,6 +8,8 @@ import asyncpg
 from app import db, notificacoes
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 MENSAGEM_ACOLHIMENTO = (
     "Entendo que isso é importante, e quero que você saiba que não está sozinho(a) nisso. "
     "Já avisei {profissional} agora mesmo, e ela(e) vai entrar em contato com você o quanto antes."
@@ -15,6 +18,21 @@ MENSAGEM_ERRO_IA = (
     "Estou com uma instabilidade técnica aqui do meu lado agora. "
     "Pode mandar sua mensagem de novo daqui a pouco?"
 )
+MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO = (
+    "Peraí, deixa eu confirmar direitinho antes: qual horário e local você quer mesmo? "
+    "Quero ter certeza de que registrei tudo certo antes de confirmar pra você."
+)
+_PALAVRAS_CONFIRMACAO = ("confirmad", "marcad", "agendad", "reservad")
+
+
+def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
+    """Detecta o modelo dizendo que um agendamento foi feito sem ter chamado
+    criar_agendamento com sucesso nessa resposta — visto em produção (o bot confirmou
+    uma consulta pro paciente "Gustavo" que nunca foi criada no banco)."""
+    texto_lower = texto.lower()
+    alegou_confirmacao = any(palavra in texto_lower for palavra in _PALAVRAS_CONFIRMACAO)
+    agendamento_real = any(a.startswith("Agendamento criado com sucesso") for a in acoes)
+    return alegou_confirmacao and not agendamento_real
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 MODELO = "claude-haiku-4-5"
@@ -329,7 +347,13 @@ async def processar_mensagem(
         "tratamento dos dados de saúde dele conforme a LGPD antes de chamar criar_agendamento, e só "
         "passe consentimento_lgpd=true depois que ele confirmar.\n"
         "Se o paciente relatar uma situação de crise ou pedir algo fora do escopo de agendamento "
-        "(conselho clínico, diagnóstico, etc.), NÃO tente ajudar — chame acolher_e_escalar imediatamente."
+        "(conselho clínico, diagnóstico, etc.), NÃO tente ajudar — chame acolher_e_escalar imediatamente.\n"
+        "REGRA CRÍTICA: nunca diga que um agendamento está 'confirmado', 'marcado' ou 'agendado' sem "
+        "antes ter chamado a ferramenta criar_agendamento NESSA MESMA resposta e recebido o resultado "
+        "de sucesso dela. Assim que o paciente confirmar horário e consentimento (quando aplicável), "
+        "sua próxima ação é chamar criar_agendamento — não é escrever uma mensagem de confirmação em "
+        "texto. Dizer que está confirmado sem ter chamado a ferramenta é uma mentira que engana o "
+        "paciente com uma consulta que não existe de verdade no sistema."
     )
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -352,6 +376,12 @@ async def processar_mensagem(
         chamadas = [b for b in resposta.content if b.type == "tool_use"]
         if not chamadas:
             texto = "".join(b.text for b in resposta.content if b.type == "text")
+            if _alega_confirmacao_sem_ter_agendado(texto, acoes):
+                logger.warning(
+                    "Bot tentou confirmar agendamento sem chamar criar_agendamento (telefone=%s): %s",
+                    telefone_paciente, texto,
+                )
+                return {"resposta": MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO, "acoes": acoes}
             return {"resposta": texto, "acoes": acoes}
 
         messages.append({"role": "assistant", "content": resposta.content})
