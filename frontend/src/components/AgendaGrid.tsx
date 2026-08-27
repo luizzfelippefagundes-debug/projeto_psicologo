@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/components/Modal";
 import {
   formatHoraBrasilia,
+  getAgoraBrasilia,
   sessaoGridPosition,
   type Local,
   type Paciente,
@@ -13,6 +14,7 @@ import {
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 const HORAS = Array.from({ length: 14 }, (_, i) => 7 + i); // 07:00 .. 20:00
+const ALTURA_LINHA_PX = 44;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -99,6 +101,26 @@ export function AgendaGrid({
     mensagem: string;
     executar: (notificar: boolean) => Promise<void>;
   } | null>(null);
+
+  const [, forcarAtualizacao] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forcarAtualizacao((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const diaIndexHoje = weekDates.indexOf(hojeISO);
+  let linhaAgora: { gridColumn: number; gridRow: string; percentNoSlot: number } | null = null;
+  if (diaIndexHoje !== -1) {
+    const { hour, minute } = getAgoraBrasilia();
+    const totalMeiaHoras = (hour - HORAS[0]) * 2 + (minute >= 30 ? 1 : 0);
+    if (totalMeiaHoras >= 0 && totalMeiaHoras < HORAS.length * 2) {
+      linhaAgora = {
+        gridColumn: diaIndexHoje + 2,
+        gridRow: `${totalMeiaHoras + 1} / span 1`,
+        percentNoSlot: ((minute % 30) / 30) * 100,
+      };
+    }
+  }
 
   function abrirCriacao(dataInicial?: string, horaInicial?: string) {
     setSessaoEditando(null);
@@ -255,7 +277,7 @@ export function AgendaGrid({
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-        <div className="grid min-w-[760px] grid-cols-[56px_repeat(7,1fr)] border-b border-border">
+        <div className="grid min-w-[600px] grid-cols-[64px_repeat(5,1fr)] border-b border-border">
           <div />
           {weekDates.map((dateISO) => {
             const isHoje = dateISO === hojeISO;
@@ -283,13 +305,13 @@ export function AgendaGrid({
         </div>
 
         <div
-          className="relative grid min-w-[760px] grid-cols-[56px_repeat(7,1fr)]"
-          style={{ gridTemplateRows: `repeat(${HORAS.length * 2}, 32px)` }}
+          className="relative grid min-w-[600px] grid-cols-[64px_repeat(5,1fr)]"
+          style={{ gridTemplateRows: `repeat(${HORAS.length * 2}, ${ALTURA_LINHA_PX}px)` }}
         >
           {HORAS.map((hora, i) => (
             <div
               key={hora}
-              className="border-t border-border pr-2 text-right text-[11.5px] text-muted"
+              className="border-t border-border pr-2 text-right text-[13px] font-semibold text-muted"
               style={{ gridColumn: 1, gridRow: `${i * 2 + 1} / span 2` }}
             >
               {String(hora).padStart(2, "0")}:00
@@ -318,7 +340,7 @@ export function AgendaGrid({
 
           {sessoes.map((sessao) => {
             const pos = sessaoGridPosition(sessao.data_hora, sessao.duracao_minutos);
-            if (pos.rowStart < 1 || pos.rowStart > HORAS.length * 2) return null;
+            if (pos.dayIndex > 4 || pos.rowStart < 1 || pos.rowStart > HORAS.length * 2) return null;
             return (
               <button
                 key={sessao.id}
@@ -330,24 +352,38 @@ export function AgendaGrid({
                 }}
                 onDragEnd={() => setArrastando(null)}
                 onClick={() => abrirPreview(sessao)}
-                className={`m-0.5 cursor-grab overflow-hidden rounded-lg border-l-[3px] border-accent bg-accent-soft px-2 py-1 text-left text-[12px] font-bold text-accent-dark hover:brightness-95 active:cursor-grabbing ${
-                  arrastando === sessao.id ? "opacity-40" : ""
-                }`}
+                className={`m-[3px] cursor-grab overflow-hidden rounded-xl px-2.5 py-2 text-left text-[12px] font-bold text-white shadow-[0_4px_10px_var(--color-shadow)] hover:brightness-95 active:cursor-grabbing ${
+                  sessao.modalidade === "teleconsulta" ? "bg-gold" : "bg-accent"
+                } ${arrastando === sessao.id ? "opacity-40" : ""}`}
                 style={{
                   gridColumn: pos.dayIndex + 2,
                   gridRow: `${pos.rowStart} / span ${pos.rowSpan}`,
                 }}
               >
-                <span className="block text-[11px] font-semibold opacity-80">
+                <span className="block text-[11px] font-semibold opacity-90">
                   {formatHoraBrasilia(sessao.data_hora)}
                 </span>
-                {sessao.paciente_nome}
-                <span className="block truncate text-[10.5px] font-medium opacity-70">
+                <span className="block text-[13.5px] font-extrabold">{sessao.paciente_nome}</span>
+                <span className="block truncate text-[10.5px] font-semibold opacity-80">
                   {sessao.local_nome}
                 </span>
               </button>
             );
           })}
+
+          {linhaAgora && (
+            <div
+              className="pointer-events-none relative z-10"
+              style={{ gridColumn: linhaAgora.gridColumn, gridRow: linhaAgora.gridRow }}
+            >
+              <div
+                className="absolute left-0 right-0 h-[2px] bg-accent"
+                style={{ top: `${linhaAgora.percentNoSlot}%` }}
+              >
+                <span className="absolute -left-[5px] -top-[4px] h-[10px] w-[10px] rounded-full bg-accent" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
