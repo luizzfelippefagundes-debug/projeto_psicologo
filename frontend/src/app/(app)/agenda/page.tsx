@@ -50,7 +50,7 @@ export default async function AgendaPage({
         <div>
           <h1 className="text-2xl font-extrabold">Agenda</h1>
           <p className="mt-1 text-[14.5px] text-muted">
-            {formatDiaMesCurto(weekDates[0])} – {formatDiaMesCurto(weekDates[6])}
+            {formatDiaMesCurto(weekDates[0])} – {formatDiaMesCurto(weekDates[4])}
           </p>
         </div>
         <div className="flex items-center gap-3">
