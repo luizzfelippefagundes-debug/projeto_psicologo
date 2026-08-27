@@ -297,23 +297,33 @@ async def entrar_lista_espera(
         )
 
 
-async def confirmar_horario_reservado(profissional_id: int, telefone_paciente: str, sessao_id: int) -> dict:
+async def confirmar_horario_reservado(profissional_id: int, telefone_paciente: str) -> dict:
     async with db.pool.acquire() as conn:
-        # WHERE por telefone (via subquery) garante que só o dono do hold consegue
-        # confirmá-lo — sem isso, um paciente poderia adivinhar/testar sessao_id alheio.
+        # Busca o hold ativo mais recente desse paciente, em vez de exigir um sessao_id —
+        # o histórico de conversa persistido (bot_conversas.historico) só guarda o texto
+        # falado pelo bot, não o resultado estruturado da tool call. Um sessao_id devolvido
+        # por segurar_horario existe só dentro daquela mesma resposta; numa mensagem
+        # seguinte (webhook novo, historico recarregado do banco) o modelo não tem mais
+        # como saber qual id confirmar. Bug real visto testando em produção.
         sessao = await conn.fetchrow(
             """
             UPDATE sessoes SET status = 'confirmada'
-            WHERE id = $1 AND profissional_id = $2 AND status = 'reservado'
-              AND paciente_id = (SELECT id FROM pacientes WHERE telefone = $3 AND profissional_id = $2)
+            WHERE id = (
+                SELECT s.id FROM sessoes s
+                JOIN pacientes p ON p.id = s.paciente_id
+                WHERE p.telefone = $2 AND p.profissional_id = $1
+                  AND s.profissional_id = $1 AND s.status = 'reservado'
+                ORDER BY s.criado_em DESC
+                LIMIT 1
+            )
             RETURNING id, paciente_id, local_id, data_hora, duracao_minutos, modalidade, link_teleconsulta
             """,
-            sessao_id, profissional_id, telefone_paciente,
+            profissional_id, telefone_paciente,
         )
         if sessao is None:
             raise ValueError(
-                "Esse horário reservado não existe mais, já expirou, ou não é seu. Quer que eu "
-                "consulte os horários disponíveis de novo?"
+                "Não encontrei nenhum horário reservado ativo pra esse paciente — pode já ter "
+                "expirado. Quer que eu consulte os horários disponíveis de novo?"
             )
 
         paciente = await conn.fetchrow(
@@ -499,19 +509,15 @@ TOOLS = [
     {
         "name": "confirmar_horario_reservado",
         "description": (
-            "Confirma de vez um horário que já estava reservado (segurado) nessa conversa, "
+            "Confirma de vez o horário reservado (segurado) mais recente desse paciente, "
             "convertendo a reserva numa consulta confirmada de verdade. Use quando o paciente "
-            "voltar dizendo que quer confirmar o horário que você segurou pra ele."
+            "voltar dizendo que quer confirmar o horário que você segurou pra ele — não precisa "
+            "de nenhum dado extra, a ferramenta identifica a reserva ativa automaticamente."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {
-                "sessao_id": {
-                    "type": "integer",
-                    "description": "O sessao_id que veio no resultado de segurar_horario, nessa mesma conversa.",
-                },
-            },
-            "required": ["sessao_id"],
+            "properties": {},
+            "required": [],
         },
     },
     {
@@ -608,9 +614,7 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
             return f"Horário reservado com sucesso: {resultado}"
 
         if nome == "confirmar_horario_reservado":
-            resultado = await confirmar_horario_reservado(
-                profissional_id, telefone_paciente, entrada["sessao_id"]
-            )
+            resultado = await confirmar_horario_reservado(profissional_id, telefone_paciente)
             return f"Reserva confirmada com sucesso: {resultado}"
 
         if nome == "entrar_lista_espera":
@@ -679,8 +683,9 @@ async def processar_mensagem(
         "- Se o paciente demonstrar interesse num horário mas hesitar ou pedir pra pensar/confirmar "
         "depois, ofereça segurar esse horário com segurar_horario em vez de deixar a conversa parar "
         "aí — diga até quando fica reservado (o campo expira_em do resultado). Quando ele voltar "
-        "confirmando, use confirmar_horario_reservado com o sessao_id que você recebeu de "
-        "segurar_horario nessa conversa.\n"
+        "confirmando — mesmo que seja numa mensagem bem depois, em outra conversa — use "
+        "confirmar_horario_reservado (não precisa de nenhum dado extra, ela já identifica sozinha "
+        "a reserva ativa desse paciente).\n"
         "- Se consultar_horarios_disponiveis não achar nada bom pro que o paciente quer (ex: dia "
         "lotado), ofereça entrar na lista de espera com entrar_lista_espera em vez de só dizer que "
         "não tem horário.\n"
