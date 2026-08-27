@@ -114,6 +114,7 @@ async def criar_agendamento(
     modalidade: str = "presencial",
     duracao_minutos: int = 50,
     consentimento_lgpd: bool = False,
+    data_nascimento_str: str | None = None,
 ) -> dict:
     if modalidade not in ("presencial", "teleconsulta"):
         modalidade = "presencial"
@@ -121,6 +122,8 @@ async def criar_agendamento(
     data_hora = datetime.fromisoformat(data_hora_str)
     if data_hora.tzinfo is None:
         data_hora = data_hora.replace(tzinfo=BRASILIA)
+
+    data_nascimento = date.fromisoformat(data_nascimento_str) if data_nascimento_str else None
 
     async with db.pool.acquire() as conn:
         local = await conn.fetchrow(
@@ -143,11 +146,11 @@ async def criar_agendamento(
                 )
             paciente = await conn.fetchrow(
                 """
-                INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
-                VALUES ($1, $2, $3, 'individual', true, now())
+                INSERT INTO pacientes (profissional_id, nome, telefone, data_nascimento, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
+                VALUES ($1, $2, $3, $4, 'individual', true, now())
                 RETURNING id, nome, email, tipo_procedimento, data_nascimento
                 """,
-                profissional_id, nome_paciente, telefone_paciente,
+                profissional_id, nome_paciente, telefone_paciente, data_nascimento,
             )
 
         try:
@@ -282,6 +285,16 @@ TOOLS = [
                         "conforme a LGPD. Pra pacientes que já têm cadastro, não precisa disso."
                     ),
                 },
+                "data_nascimento": {
+                    "type": "string",
+                    "description": (
+                        "Data de nascimento do paciente, no formato YYYY-MM-DD. Só preencha se "
+                        "for a primeira sessão de um paciente novo (mesmo momento em que se "
+                        "pergunta o consentimento LGPD) — usada depois pra decidir qual versão "
+                        "de formulário de anamnese enviar antes da consulta, quando aplicável. "
+                        "Pra pacientes que já têm cadastro, não precisa perguntar de novo."
+                    ),
+                },
             },
             "required": ["nome_paciente", "local_nome", "data_hora"],
         },
@@ -340,6 +353,7 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
                 entrada.get("modalidade", "presencial"),
                 entrada.get("duracao_minutos", 50),
                 entrada.get("consentimento_lgpd", False),
+                entrada.get("data_nascimento"),
             )
             return f"Agendamento criado com sucesso: {resultado}"
 
@@ -402,6 +416,9 @@ async def processar_mensagem(
         "- SEMPRE pergunte explicitamente sobre consentimento LGPD antes de chamar criar_agendamento "
         "se for a primeira sessão de um paciente novo, e só passe consentimento_lgpd=true depois que "
         "ele confirmar.\n"
+        "- SEMPRE pergunte a data de nascimento do paciente (no mesmo momento em que perguntar o "
+        "consentimento LGPD) se for a primeira sessão de um paciente novo, e passe em "
+        "data_nascimento. Pra pacientes que já têm cadastro, não precisa perguntar de novo.\n"
         "- SEMPRE chame acolher_e_escalar imediatamente (sem tentar ajudar você mesmo) se o paciente "
         "relatar uma situação de crise ou pedir algo fora do escopo de agendamento (conselho "
         "clínico, diagnóstico, etc.)."
