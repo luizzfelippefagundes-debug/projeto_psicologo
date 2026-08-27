@@ -22,7 +22,7 @@ MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO = (
     "Peraí, deixa eu confirmar direitinho antes: qual horário e local você quer mesmo? "
     "Quero ter certeza de que registrei tudo certo antes de confirmar pra você."
 )
-_PALAVRAS_CONFIRMACAO = ("confirmad", "marcad", "agendad", "reservad")
+_PALAVRAS_CONFIRMACAO = ("confirmad", "marcad", "agendad", "reservad", "segur")
 
 _PREFIXOS_ACAO_REAL = (
     "Agendamento criado com sucesso",
