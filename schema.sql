@@ -136,6 +136,7 @@ CREATE TABLE bot_conversas (
     id SERIAL PRIMARY KEY,
     profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     telefone_paciente VARCHAR(20) NOT NULL,
+    nome_whatsapp VARCHAR(100), -- nome de exibição do WhatsApp (pushName), pra listar contatos que não agendaram
     historico JSONB NOT NULL DEFAULT '[]'::jsonb, -- lista de {role, content}, limitada nas últimas N mensagens
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (profissional_id, telefone_paciente)
