@@ -105,6 +105,42 @@ async def horarios_disponiveis(
     return livres
 
 
+async def _buscar_local(conn, profissional_id: int, local_nome: str):
+    local = await conn.fetchrow(
+        "SELECT id, nome FROM locais WHERE profissional_id = $1 AND nome ILIKE $2",
+        profissional_id, local_nome,
+    )
+    if local is None:
+        raise ValueError(f"Não encontrei o local '{local_nome}'.")
+    return local
+
+
+async def _buscar_ou_criar_paciente(
+    conn, profissional_id: int, nome_paciente: str, telefone_paciente: str,
+    consentimento_lgpd: bool, data_nascimento,
+):
+    paciente = await conn.fetchrow(
+        "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
+        profissional_id, telefone_paciente,
+    )
+    if paciente is not None:
+        return paciente
+    if not consentimento_lgpd:
+        raise ValueError(
+            "Antes de agendar, preciso do consentimento explícito do paciente pra tratar "
+            "os dados de saúde dele conforme a LGPD. Pergunte se ele concorda, e só chame "
+            "essa ferramenta de novo com consentimento_lgpd=true depois que ele confirmar."
+        )
+    return await conn.fetchrow(
+        """
+        INSERT INTO pacientes (profissional_id, nome, telefone, data_nascimento, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
+        VALUES ($1, $2, $3, $4, 'individual', true, now())
+        RETURNING id, nome, email, tipo_procedimento, data_nascimento
+        """,
+        profissional_id, nome_paciente, telefone_paciente, data_nascimento,
+    )
+
+
 async def criar_agendamento(
     profissional_id: int,
     nome_paciente: str,
@@ -126,32 +162,10 @@ async def criar_agendamento(
     data_nascimento = date.fromisoformat(data_nascimento_str) if data_nascimento_str else None
 
     async with db.pool.acquire() as conn:
-        local = await conn.fetchrow(
-            "SELECT id, nome FROM locais WHERE profissional_id = $1 AND nome ILIKE $2",
-            profissional_id, local_nome,
+        local = await _buscar_local(conn, profissional_id, local_nome)
+        paciente = await _buscar_ou_criar_paciente(
+            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd, data_nascimento
         )
-        if local is None:
-            raise ValueError(f"Não encontrei o local '{local_nome}'.")
-
-        paciente = await conn.fetchrow(
-            "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
-            profissional_id, telefone_paciente,
-        )
-        if paciente is None:
-            if not consentimento_lgpd:
-                raise ValueError(
-                    "Antes de agendar, preciso do consentimento explícito do paciente pra tratar "
-                    "os dados de saúde dele conforme a LGPD. Pergunte se ele concorda, e só chame "
-                    "essa ferramenta de novo com consentimento_lgpd=true depois que ele confirmar."
-                )
-            paciente = await conn.fetchrow(
-                """
-                INSERT INTO pacientes (profissional_id, nome, telefone, data_nascimento, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
-                VALUES ($1, $2, $3, $4, 'individual', true, now())
-                RETURNING id, nome, email, tipo_procedimento, data_nascimento
-                """,
-                profissional_id, nome_paciente, telefone_paciente, data_nascimento,
-            )
 
         try:
             sessao = await conn.fetchrow(
