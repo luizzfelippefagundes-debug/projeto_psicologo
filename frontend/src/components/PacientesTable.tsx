@@ -19,6 +19,7 @@ type FormState = {
   nome: string;
   telefone: string;
   email: string;
+  dataNascimento: string;
   tipoAtendimento: "individual" | "casal";
   tipoProcedimento: string;
   status: "ativo" | "inativo";
@@ -30,6 +31,7 @@ function pacienteParaFormState(paciente: Paciente): FormState {
     nome: paciente.nome,
     telefone: paciente.telefone,
     email: paciente.email ?? "",
+    dataNascimento: paciente.data_nascimento ?? "",
     tipoAtendimento: paciente.tipo_atendimento,
     tipoProcedimento: paciente.tipo_procedimento ?? "",
     status: paciente.status,
@@ -42,6 +44,7 @@ function formStateVazio(): FormState {
     nome: "",
     telefone: "",
     email: "",
+    dataNascimento: "",
     tipoAtendimento: "individual",
     tipoProcedimento: "",
     status: "ativo",
@@ -266,6 +269,7 @@ export function PacientesTable({
       nome: form.nome,
       telefone: form.telefone,
       email: form.email || null,
+      data_nascimento: form.dataNascimento || null,
       tipo_atendimento: form.tipoAtendimento,
       consentimento_lgpd: form.consentimentoLgpd,
     };
@@ -400,6 +404,19 @@ export function PacientesTable({
                 className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
               />
             </div>
+          </div>
+
+          <div className="flex flex-col">
+            <label htmlFor="data-nascimento" className="mb-1.5 text-sm font-semibold">
+              Data de nascimento
+            </label>
+            <input
+              id="data-nascimento"
+              type="date"
+              value={form.dataNascimento}
+              onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })}
+              className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+            />
           </div>
 
           <div className="flex flex-col">
