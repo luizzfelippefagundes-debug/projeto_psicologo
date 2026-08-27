@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import anthropic
 import asyncpg
 
-from app import db, notificacoes
+from app import anamnese, db, notificacoes
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ async def criar_agendamento(
             raise ValueError(f"Não encontrei o local '{local_nome}'.")
 
         paciente = await conn.fetchrow(
-            "SELECT id, nome FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
+            "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
             profissional_id, telefone_paciente,
         )
         if paciente is None:
@@ -145,7 +145,7 @@ async def criar_agendamento(
                 """
                 INSERT INTO pacientes (profissional_id, nome, telefone, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
                 VALUES ($1, $2, $3, 'individual', true, now())
-                RETURNING id, nome
+                RETURNING id, nome, email, tipo_procedimento, data_nascimento
                 """,
                 profissional_id, nome_paciente, telefone_paciente,
             )
@@ -161,6 +161,22 @@ async def criar_agendamento(
             )
         except asyncpg.exceptions.ExclusionViolationError:
             raise ValueError("Esse horário acabou de ser ocupado por outra sessão. Escolha outro horário.")
+
+        whatsapp_instance = await conn.fetchval(
+            "SELECT whatsapp_instance FROM profissionais WHERE id = $1", profissional_id
+        )
+
+    # Mesmo hook de main.py:criar_sessao — aqui cobre agendamentos feitos pelo próprio bot,
+    # que não passam pelo endpoint POST /sessoes (visto em produção: paciente agendava pelo
+    # WhatsApp e só recebia a anamnese no lembrete de 24h, não na hora da confirmação).
+    await anamnese.enviar_anamnese(
+        paciente_email=paciente["email"],
+        paciente_telefone=telefone_paciente,
+        paciente_nome=paciente["nome"],
+        tipo_procedimento=paciente["tipo_procedimento"],
+        data_nascimento=paciente["data_nascimento"],
+        whatsapp_instance=whatsapp_instance,
+    )
 
     return {
         "sessao_id": sessao["id"],
