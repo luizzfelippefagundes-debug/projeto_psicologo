@@ -960,6 +960,8 @@ async def webhook_whatsapp(request: Request):
 
     instance = payload.get("instance")
     remote_jid, texto, from_me, message_id, push_name = _extrair_mensagem_whatsapp(payload)
+    # trunca pro limite da coluna (VARCHAR(100)) e trata string vazia como "sem nome"
+    push_name = (push_name or "").strip()[:100] or None
 
     if not instance or from_me or not remote_jid or not texto:
         return {"status": "ignorado"}
