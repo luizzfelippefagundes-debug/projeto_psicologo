@@ -37,6 +37,7 @@ CREATE TABLE pacientes (
     nome VARCHAR(150) NOT NULL,
     telefone VARCHAR(20) NOT NULL, -- número de WhatsApp do paciente
     email VARCHAR(150),
+    data_nascimento DATE, -- opcional; usado pra decidir a versão do formulário de anamnese
     tipo_atendimento VARCHAR(20) NOT NULL DEFAULT 'individual'
         CHECK (tipo_atendimento IN ('individual', 'casal')),
     tipo_procedimento VARCHAR(60)
