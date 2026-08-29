@@ -143,7 +143,7 @@ async def _buscar_local(conn, profissional_id: int, local_nome: str):
 
 async def _buscar_ou_criar_paciente(
     conn, profissional_id: int, nome_paciente: str, telefone_paciente: str,
-    consentimento_lgpd: bool, data_nascimento,
+    consentimento_lgpd: bool, data_nascimento, procedimento_estimulacao: bool = False,
 ):
     paciente = await conn.fetchrow(
         "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
@@ -157,13 +157,19 @@ async def _buscar_ou_criar_paciente(
             "os dados de saúde dele conforme a LGPD. Pergunte se ele concorda, e só chame "
             "essa ferramenta de novo com consentimento_lgpd=true depois que ele confirmar."
         )
+    # 'neuromodulacao' quando a consulta é de estimulação/tDCS — isso já garante o envio da
+    # anamnese certa na hora, em vez de depender só da profissional marcar isso depois pelo
+    # painel. Só esse valor específico é definido aqui de propósito: as outras categorias
+    # clínicas (avaliação, terapia, reabilitação sem estimulação) continuam sendo decisão da
+    # profissional, não algo que o bot deveria classificar sozinho numa conversa de WhatsApp.
+    tipo_procedimento = "neuromodulacao" if procedimento_estimulacao else None
     return await conn.fetchrow(
         """
-        INSERT INTO pacientes (profissional_id, nome, telefone, data_nascimento, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
-        VALUES ($1, $2, $3, $4, 'individual', true, now())
+        INSERT INTO pacientes (profissional_id, nome, telefone, data_nascimento, tipo_procedimento, tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data)
+        VALUES ($1, $2, $3, $4, $5, 'individual', true, now())
         RETURNING id, nome, email, tipo_procedimento, data_nascimento
         """,
-        profissional_id, nome_paciente, telefone_paciente, data_nascimento,
+        profissional_id, nome_paciente, telefone_paciente, data_nascimento, tipo_procedimento,
     )
 
 
@@ -177,6 +183,7 @@ async def criar_agendamento(
     duracao_minutos: int = 50,
     consentimento_lgpd: bool = False,
     data_nascimento_str: str | None = None,
+    procedimento_estimulacao: bool = False,
 ) -> dict:
     if modalidade not in ("presencial", "teleconsulta"):
         modalidade = "presencial"
@@ -190,7 +197,8 @@ async def criar_agendamento(
     async with db.pool.acquire() as conn:
         local = await _buscar_local(conn, profissional_id, local_nome)
         paciente = await _buscar_ou_criar_paciente(
-            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd, data_nascimento
+            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd,
+            data_nascimento, procedimento_estimulacao,
         )
 
         try:
@@ -244,6 +252,7 @@ async def segurar_horario(
     duracao_minutos: int = 50,
     consentimento_lgpd: bool = False,
     data_nascimento_str: str | None = None,
+    procedimento_estimulacao: bool = False,
 ) -> dict:
     if modalidade not in ("presencial", "teleconsulta"):
         modalidade = "presencial"
@@ -258,7 +267,8 @@ async def segurar_horario(
     async with db.pool.acquire() as conn:
         local = await _buscar_local(conn, profissional_id, local_nome)
         paciente = await _buscar_ou_criar_paciente(
-            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd, data_nascimento
+            conn, profissional_id, nome_paciente, telefone_paciente, consentimento_lgpd,
+            data_nascimento, procedimento_estimulacao,
         )
 
         # Cancela qualquer hold anterior ainda ativo desse paciente antes de criar um novo —
@@ -524,6 +534,18 @@ TOOLS = [
                         "Pra pacientes que já têm cadastro, não precisa perguntar de novo."
                     ),
                 },
+                "procedimento_estimulacao": {
+                    "type": "boolean",
+                    "description": (
+                        "Só true se for a primeira sessão de um paciente novo E a consulta for "
+                        "de estimulação/neuromodulação (tDCS) — pergunte isso de forma simples "
+                        "('é uma consulta de estimulação/tDCS ou uma consulta regular?'), nunca "
+                        "peça pro paciente escolher entre categorias clínicas. Isso já garante o "
+                        "envio do formulário de anamnese certo na hora da confirmação. Pra "
+                        "pacientes que já têm cadastro, não precisa perguntar de novo — quem "
+                        "decide o tipo de procedimento deles é a profissional, pelo painel."
+                    ),
+                },
             },
             "required": ["nome_paciente", "local_nome", "data_hora"],
         },
@@ -558,6 +580,16 @@ TOOLS = [
                         "Data de nascimento do paciente, no formato YYYY-MM-DD. Só preencha se "
                         "for a primeira sessão de um paciente novo. Pra pacientes que já têm "
                         "cadastro, não precisa perguntar de novo."
+                    ),
+                },
+                "procedimento_estimulacao": {
+                    "type": "boolean",
+                    "description": (
+                        "Só true se for a primeira sessão de um paciente novo E a consulta for "
+                        "de estimulação/neuromodulação (tDCS) — pergunte isso de forma simples "
+                        "('é uma consulta de estimulação/tDCS ou uma consulta regular?'), nunca "
+                        "peça pro paciente escolher entre categorias clínicas. Pra pacientes que "
+                        "já têm cadastro, não precisa perguntar de novo."
                     ),
                 },
             },
@@ -663,6 +695,7 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
                 entrada.get("duracao_minutos", 50),
                 entrada.get("consentimento_lgpd", False),
                 entrada.get("data_nascimento"),
+                entrada.get("procedimento_estimulacao", False),
             )
             return f"Agendamento criado com sucesso: {resultado}"
 
@@ -677,6 +710,7 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
                 entrada.get("duracao_minutos", 50),
                 entrada.get("consentimento_lgpd", False),
                 entrada.get("data_nascimento"),
+                entrada.get("procedimento_estimulacao", False),
             )
             return f"Horário reservado com sucesso: {resultado}"
 
@@ -776,6 +810,19 @@ async def processar_mensagem(
         "- SEMPRE pergunte a data de nascimento do paciente (no mesmo momento em que perguntar o "
         "consentimento LGPD) se for a primeira sessão de um paciente novo, e passe em "
         "data_nascimento. Pra pacientes que já têm cadastro, não precisa perguntar de novo.\n"
+        "- SEMPRE pergunte, de forma simples (ex: 'é uma consulta de estimulação/tDCS ou uma "
+        "consulta regular?'), se a consulta é de estimulação/neuromodulação, no mesmo momento em "
+        "que perguntar o consentimento LGPD, se for a primeira sessão de um paciente novo — passe "
+        "em procedimento_estimulacao. NUNCA peça pro paciente escolher entre categorias clínicas "
+        "(isso é decisão da profissional, não do bot). Pra pacientes que já têm cadastro, não "
+        "precisa perguntar de novo.\n"
+        "- Quem está conversando por WhatsApp pode não ser o próprio paciente (ex: filho(a) "
+        "marcando consulta pra mãe/pai, responsável marcando pra criança). NUNCA chame quem está "
+        "conversando pelo nome do paciente — são pessoas diferentes. Use o nome do paciente só "
+        "pra se referir ao paciente (ex: 'a consulta da sua mãe'), nunca pra cumprimentar ou se "
+        "dirigir a quem está no chat.\n"
+        "- Ao perguntar se uma data ou horário serve, prefira frases tipo 'Isso fica bom pra "
+        "você?' em vez de 'Isso serve pra você?' ou 'Funciona para você?'.\n"
         "- SEMPRE chame acolher_e_escalar imediatamente (sem tentar ajudar você mesmo) se o paciente "
         "relatar uma situação de crise ou pedir algo fora do escopo de agendamento (conselho "
         "clínico, diagnóstico, etc.)."
