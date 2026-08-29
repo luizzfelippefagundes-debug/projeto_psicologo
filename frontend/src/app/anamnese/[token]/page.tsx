@@ -110,14 +110,16 @@ export default function AnamnesePage() {
   const campoNomeId = estado.campos[0].id;
 
   return (
-    <div className="flex min-h-full flex-1 justify-center p-6" style={ESTILO_CLARO}>
-      <div className="w-full max-w-[640px] rounded-3xl border border-border bg-card p-8 shadow-[0_10px_30px_var(--color-shadow)]">
-        <h1 className="text-xl font-extrabold">Formulário de anamnese</h1>
-        <p className="mt-1 text-[14px] text-muted">
-          Olá, {estado.pacienteNome}! Preencha com calma — só o nome é obrigatório.
-        </p>
+    <div className="flex h-screen items-center justify-center p-6" style={ESTILO_CLARO}>
+      <div className="flex max-h-[85vh] w-full max-w-[640px] flex-col rounded-3xl border border-border bg-card shadow-[0_10px_30px_var(--color-shadow)]">
+        <div className="p-8 pb-4">
+          <h1 className="text-xl font-extrabold">Formulário de anamnese</h1>
+          <p className="mt-1 text-[14px] text-muted">
+            Olá, {estado.pacienteNome}! Preencha com calma — só o nome é obrigatório.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-8 pb-8">
           {secoes.map((secao) => (
             <div key={secao}>
               <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-muted">{secao}</h2>
