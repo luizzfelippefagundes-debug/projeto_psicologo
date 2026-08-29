@@ -36,7 +36,7 @@ export const CAMPOS_ADULTO: CampoAnamnese[] = [
   { id: "implante_coclear", secao: "Histórico médico — cirurgias", label: "Implante coclear?", tipo: "booleano" },
   { id: "internacoes", secao: "Histórico médico", label: "Já foi internado? Quando e por qual motivo?", tipo: "textarea" },
   { id: "medicamentos_atuais", secao: "Histórico médico", label: "Quais medicamentos usa atualmente?", tipo: "textarea" },
-  { id: "alergias", secao: "Histórico médico", label: "Tem alergia a algum medicamento, metal ou cosmético?", tipo: "textarea" },
+  { id: "alergias", secao: "Histórico médico", label: "Possui alergia? Qual?", tipo: "textarea" },
   { id: "depressao", secao: "Histórico médico — psiquiátrico", label: "Depressão", tipo: "booleano" },
   { id: "ansiedade", secao: "Histórico médico — psiquiátrico", label: "Ansiedade", tipo: "booleano" },
   { id: "tea", secao: "Histórico médico — psiquiátrico", label: "TEA", tipo: "booleano" },
