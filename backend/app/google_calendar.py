@@ -114,6 +114,15 @@ async def _access_token_valido(profissional_id: int) -> str | None:
     return tokens["access_token"]
 
 
+async def conexao_ativa(profissional_id: int) -> bool:
+    """True só se existe conexão E o token consegue ser usado/renovado de verdade —
+    diferente de só checar se a linha existe em google_conexoes, que ficava mostrando
+    'conectado' pro profissional mesmo depois do token ser revogado do lado do Google
+    (usuário via 'conectado' na tela sem conseguir sincronizar nada, e sem um jeito de
+    reconectar, já que o botão de conectar só aparece quando conectado=false)."""
+    return await _access_token_valido(profissional_id) is not None
+
+
 def _evento_payload(paciente_nome: str, local_nome: str, data_hora, data_hora_fim, observacoes, sessao_id: int) -> dict:
     return {
         "summary": f"Consulta - {paciente_nome}",

@@ -1167,13 +1167,13 @@ async def google_callback(code: str, state: str):
     profissional_id = int(state)
     tokens = await google_calendar.trocar_code_por_tokens(code)
     await google_calendar.salvar_conexao(profissional_id, tokens)
-    return RedirectResponse("http://localhost:3000/configuracoes?google=conectado")
+    return RedirectResponse(f"{settings.frontend_url}/configuracoes?google=conectado")
 
 
 @app.get("/google/status")
 async def google_status(profissional_id: int = Depends(auth.get_current_profissional_id)):
-    conexao = await google_calendar.obter_conexao(profissional_id)
-    return {"conectado": conexao is not None}
+    conectado = await google_calendar.conexao_ativa(profissional_id)
+    return {"conectado": conectado}
 
 
 @app.post("/google/sincronizar")
