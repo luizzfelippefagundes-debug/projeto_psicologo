@@ -6,6 +6,26 @@ import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamne
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Formulário público: sempre no tema claro, independente do modo escuro do
+// aparelho de quem visita — não faz sentido essa página seguir a preferência
+// do sistema de quem preenche, e evita um fundo escuro "quebrado" sem o
+// ThemeToggle que o resto do app tem pra alternar.
+const ESTILO_CLARO = {
+  colorScheme: "light",
+  "--color-accent": "#a8768a",
+  "--color-accent-dark": "#8f5f73",
+  "--color-accent-soft": "#f3e8ec",
+  "--color-card": "#faf6f3",
+  "--color-fg": "#3a2f2f",
+  "--color-muted": "#8a7873",
+  "--color-border": "#ddd0c9",
+  "--color-gold": "#b8860b",
+  "--color-gold-soft": "#f5ecd6",
+  "--color-shadow": "rgba(90, 60, 60, 0.14)",
+  background: "#ffffff",
+  minHeight: "100%",
+} as React.CSSProperties;
+
 type EstadoPagina =
   | { tipo: "carregando" }
   | { tipo: "erro"; mensagem: string }
@@ -89,7 +109,7 @@ export default function AnamnesePage() {
   const campoNomeId = estado.campos[0].id;
 
   return (
-    <div className="flex min-h-full flex-1 justify-center p-6">
+    <div className="flex min-h-full flex-1 justify-center p-6" style={ESTILO_CLARO}>
       <div className="w-full max-w-[640px] rounded-3xl border border-border bg-card p-8 shadow-[0_10px_30px_var(--color-shadow)]">
         <h1 className="text-xl font-extrabold">Formulário de anamnese</h1>
         <p className="mt-1 text-[14px] text-muted">
@@ -131,7 +151,7 @@ export default function AnamnesePage() {
 
 function TelaCentralizada({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center p-6">
+    <div className="flex min-h-full flex-1 items-center justify-center p-6" style={ESTILO_CLARO}>
       <div className="w-full max-w-[440px] rounded-3xl border border-border bg-card p-10 text-center shadow-[0_10px_30px_var(--color-shadow)]">
         {children}
       </div>
