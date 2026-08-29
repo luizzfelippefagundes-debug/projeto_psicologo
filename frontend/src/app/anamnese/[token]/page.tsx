@@ -23,6 +23,7 @@ const ESTILO_CLARO = {
   "--color-gold-soft": "#f5ecd6",
   "--color-shadow": "rgba(90, 60, 60, 0.14)",
   background: "#ffffff",
+  color: "#3a2f2f",
   minHeight: "100%",
 } as React.CSSProperties;
 
