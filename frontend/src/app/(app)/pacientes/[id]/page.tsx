@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PacienteDetalhe } from "@/components/PacienteDetalhe";
-import { getPaciente, getSessoesPaciente } from "@/lib/api";
+import { getAnamnesePaciente, getPaciente, getSessoesPaciente } from "@/lib/api";
 
 export default async function PacienteDetalhePage({
   params,
@@ -14,10 +14,12 @@ export default async function PacienteDetalhePage({
 
   let paciente;
   let sessoes;
+  let anamnese;
   try {
-    [paciente, sessoes] = await Promise.all([
+    [paciente, sessoes, anamnese] = await Promise.all([
       getPaciente(pacienteId),
       getSessoesPaciente(pacienteId),
+      getAnamnesePaciente(pacienteId),
     ]);
   } catch {
     notFound();
@@ -32,7 +34,7 @@ export default async function PacienteDetalhePage({
         <ThemeToggle />
       </div>
 
-      <PacienteDetalhe paciente={paciente} sessoes={sessoes} />
+      <PacienteDetalhe paciente={paciente} sessoes={sessoes} anamnese={anamnese} />
     </div>
   );
 }

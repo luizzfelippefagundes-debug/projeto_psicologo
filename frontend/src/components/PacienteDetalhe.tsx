@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { ChatAssistente } from "@/components/ChatAssistente";
+import { CAMPOS_ADULTO, CAMPOS_INFANTIL } from "@/lib/anamneseSchema";
 import {
   formatDataHoraBrasilia,
   iniciais,
   labelProcedimento,
+  type AnamneseDetalhe,
   type Paciente,
   type SessaoHistorico,
 } from "@/lib/format";
 
-const ABAS = ["Visão geral", "Histórico de sessões", "Assistente IA"] as const;
+const ABAS = ["Visão geral", "Histórico de sessões", "Anamnese", "Assistente IA"] as const;
 type Aba = (typeof ABAS)[number];
 
 const STATUS_SESSAO_LABEL: Record<string, string> = {
@@ -23,9 +25,11 @@ const STATUS_SESSAO_LABEL: Record<string, string> = {
 export function PacienteDetalhe({
   paciente,
   sessoes,
+  anamnese,
 }: {
   paciente: Paciente;
   sessoes: SessaoHistorico[];
+  anamnese: AnamneseDetalhe;
 }) {
   const [aba, setAba] = useState<Aba>("Visão geral");
 
@@ -143,6 +147,53 @@ export function PacienteDetalhe({
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {aba === "Anamnese" && (
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+          {!anamnese ? (
+            <p className="text-[14px] text-muted">Anamnese ainda não foi enviada pra esse paciente.</p>
+          ) : !anamnese.respondido_em ? (
+            <p className="text-[14px] text-muted">
+              Formulário enviado em {formatDataHoraBrasilia(anamnese.enviado_em)}, aguardando resposta.
+            </p>
+          ) : (
+            <>
+              <p className="mb-5 text-[13px] text-muted">
+                Respondido em {formatDataHoraBrasilia(anamnese.respondido_em)}
+              </p>
+              {Array.from(
+                new Set(
+                  (anamnese.tipo_formulario === "infantil" ? CAMPOS_INFANTIL : CAMPOS_ADULTO).map(
+                    (c) => c.secao
+                  )
+                )
+              ).map((secao) => (
+                <div key={secao} className="mb-5 last:mb-0">
+                  <h3 className="mb-2 text-[12.5px] font-bold uppercase tracking-wide text-muted">
+                    {secao}
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(anamnese.tipo_formulario === "infantil" ? CAMPOS_INFANTIL : CAMPOS_ADULTO)
+                      .filter((c) => c.secao === secao)
+                      .map((campo) => {
+                        const valor = anamnese.respostas?.[campo.id];
+                        if (valor === undefined || valor === "" || valor === null) return null;
+                        return (
+                          <div key={campo.id}>
+                            <p className="text-[12px] font-bold text-muted">{campo.label}</p>
+                            <p className="mt-0.5 text-[14px]">
+                              {typeof valor === "boolean" ? (valor ? "Sim" : "Não") : valor}
+                            </p>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
       )}
