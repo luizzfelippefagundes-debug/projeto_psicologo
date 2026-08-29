@@ -1,6 +1,6 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PacientesTable } from "@/components/PacientesTable";
-import { getContatosBot, getPacientes } from "@/lib/api";
+import { getContatosBot, getPacientes, getPacientesAnamnese } from "@/lib/api";
 
 export default async function PacientesPage({
   searchParams,
@@ -8,9 +8,13 @@ export default async function PacientesPage({
   searchParams: Promise<{ aba?: string }>;
 }) {
   const { aba } = await searchParams;
-  const abaAtiva = aba === "contatos" ? "contatos" : "pacientes";
+  const abaAtiva = aba === "contatos" ? "contatos" : aba === "anamneses" ? "anamneses" : "pacientes";
 
-  const [pacientes, contatos] = await Promise.all([getPacientes(), getContatosBot()]);
+  const [pacientes, contatos, anamneses] = await Promise.all([
+    getPacientes(),
+    getContatosBot(),
+    getPacientesAnamnese(),
+  ]);
 
   return (
     <div className="pl-12 md:pl-0">
@@ -24,7 +28,12 @@ export default async function PacientesPage({
         <ThemeToggle />
       </div>
 
-      <PacientesTable pacientes={pacientes} contatos={contatos} abaAtiva={abaAtiva} />
+      <PacientesTable
+        pacientes={pacientes}
+        contatos={contatos}
+        anamneses={anamneses}
+        abaAtiva={abaAtiva}
+      />
     </div>
   );
 }

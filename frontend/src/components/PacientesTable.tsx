@@ -9,6 +9,7 @@ import {
   iniciais,
   labelProcedimento,
   PROCEDIMENTOS,
+  type AnamneseListaItem,
   type ContatoBot,
   type Paciente,
 } from "@/lib/format";
@@ -108,6 +109,86 @@ function ContatosCard({
             <tr>
               <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
                 Ninguém conversou com o bot ainda.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AnamnesesCard({
+  itens,
+  onVer,
+}: {
+  itens: AnamneseListaItem[];
+  onVer: (id: number) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
+      <div className="border-b border-border p-6">
+        <h2 className="text-[16px] font-bold">Anamneses de tDCS</h2>
+        <p className="mt-1 text-[13px] text-muted">
+          Pacientes com procedimento de estimulação/neuromodulação e o status do formulário.
+        </p>
+      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            {["Paciente", "Telefone", "Status", ""].map((col) => (
+              <th
+                key={col}
+                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+              >
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map((item) => (
+            <tr key={item.id}>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
+                {item.nome}
+              </td>
+              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                {item.telefone}
+              </td>
+              <td className="border-b border-border px-6 py-4">
+                <span
+                  className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                    item.respondido_em
+                      ? "bg-accent-soft text-accent-dark"
+                      : item.enviado_em
+                        ? "bg-gold-soft text-gold"
+                        : "bg-black/5 text-muted"
+                  }`}
+                >
+                  {item.respondido_em
+                    ? `Respondido em ${formatDataHoraBrasilia(item.respondido_em)}`
+                    : item.enviado_em
+                      ? "Aguardando resposta"
+                      : "Não enviado"}
+                </span>
+              </td>
+              <td className="border-b border-border px-6 py-4 text-right">
+                {item.respondido_em && (
+                  <button
+                    type="button"
+                    onClick={() => onVer(item.id)}
+                    className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                  >
+                    Ver respostas
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          {itens.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
+                Nenhum paciente com procedimento de estimulação cadastrado ainda.
               </td>
             </tr>
           )}
@@ -232,11 +313,13 @@ function PacientesCard({
 export function PacientesTable({
   pacientes,
   contatos,
+  anamneses,
   abaAtiva,
 }: {
   pacientes: Paciente[];
   contatos: ContatoBot[];
-  abaAtiva: "pacientes" | "contatos";
+  anamneses: AnamneseListaItem[];
+  abaAtiva: "pacientes" | "contatos" | "anamneses";
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -337,6 +420,16 @@ export function PacientesTable({
         >
           Contatos{contatos.length > 0 ? ` (${contatos.length})` : ""}
         </Link>
+        <Link
+          href="/pacientes?aba=anamneses"
+          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+            abaAtiva === "anamneses"
+              ? "bg-accent text-white"
+              : "border border-border bg-card text-fg"
+          }`}
+        >
+          Anamneses
+        </Link>
       </div>
 
       {abaAtiva === "contatos" ? (
@@ -346,6 +439,8 @@ export function PacientesTable({
             abrirCriacao({ nome: c.nome_whatsapp ?? "", telefone: c.telefone_paciente })
           }
         />
+      ) : abaAtiva === "anamneses" ? (
+        <AnamnesesCard itens={anamneses} onVer={(id) => router.push(`/pacientes/${id}`)} />
       ) : (
         <PacientesCard
           pacientes={pacientes}
