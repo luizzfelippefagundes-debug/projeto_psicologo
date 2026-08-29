@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChatAssistente } from "@/components/ChatAssistente";
-import { CAMPOS_ADULTO, CAMPOS_INFANTIL } from "@/lib/anamneseSchema";
+import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamneseSchema";
 import {
   formatDataHoraBrasilia,
   iniciais,
@@ -184,9 +184,7 @@ export function PacienteDetalhe({
                         return (
                           <div key={campo.id}>
                             <p className="text-[12px] font-bold text-muted">{campo.label}</p>
-                            <p className="mt-0.5 text-[14px]">
-                              {typeof valor === "boolean" ? (valor ? "Sim" : "Não") : valor}
-                            </p>
+                            <p className="mt-0.5 text-[14px]">{formatValorCampo(campo, valor)}</p>
                           </div>
                         );
                       })}
@@ -206,6 +204,17 @@ export function PacienteDetalhe({
       )}
     </div>
   );
+}
+
+function formatValorCampo(campo: CampoAnamnese, valor: string | boolean): string {
+  if (typeof valor === "boolean") return valor ? "Sim" : "Não";
+  // campo "data" vem do <input type="date"> como YYYY-MM-DD (formato do value do HTML,
+  // não é como a profissional lê) — mostra em DD/MM/AAAA, formato brasileiro.
+  if (campo.tipo === "data" && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    const [ano, mes, dia] = valor.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+  return valor;
 }
 
 function Campo({ label, valor }: { label: string; valor: string }) {
