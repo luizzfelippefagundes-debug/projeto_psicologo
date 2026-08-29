@@ -13,7 +13,6 @@ export const CAMPOS_ADULTO: CampoAnamnese[] = [
   { id: "telefone", secao: "Dados de identificação", label: "Telefone", tipo: "texto" },
   { id: "responsavel", secao: "Dados de identificação", label: "Responsável (se aplicável)", tipo: "texto" },
   { id: "profissao", secao: "Dados de identificação", label: "Profissão", tipo: "texto" },
-  { id: "motivo_aplicacao", secao: "Queixa principal", label: "Motivo da aplicação da tDCS", tipo: "textarea" },
   { id: "inicio_sintomas", secao: "História da doença atual", label: "Início dos sintomas", tipo: "textarea" },
   { id: "fatores_desencadeantes", secao: "História da doença atual", label: "Fatores desencadeantes", tipo: "textarea" },
   { id: "frequencia_intensidade", secao: "História da doença atual", label: "Frequência e intensidade", tipo: "textarea" },
