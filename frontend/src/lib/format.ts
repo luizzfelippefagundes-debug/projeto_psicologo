@@ -223,6 +223,21 @@ export type ContatoBot = {
   atualizado_em: string;
 };
 
+export type AnamneseListaItem = {
+  id: number;
+  nome: string;
+  telefone: string;
+  enviado_em: string | null;
+  respondido_em: string | null;
+};
+
+export type AnamneseDetalhe = {
+  tipo_formulario: "adulto" | "infantil";
+  respostas: Record<string, string | boolean> | null;
+  enviado_em: string;
+  respondido_em: string | null;
+} | null;
+
 export function sessaoGridPosition(isoDateTime: string, duracaoMinutos: number) {
   const { dateISO, hour, minute, weekdayIndex } = brazilParts(new Date(isoDateTime));
   const gridStartHour = 7;

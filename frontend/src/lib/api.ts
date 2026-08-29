@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type {
+  AnamneseDetalhe,
+  AnamneseListaItem,
   ContatoBot,
   ConversaEscalonada,
   DashboardAnalytics,
@@ -89,4 +91,12 @@ export function getConversasEscalonadas() {
 
 export function getContatosBot() {
   return apiFetch<ContatoBot[]>("/contatos-bot");
+}
+
+export function getPacientesAnamnese() {
+  return apiFetch<AnamneseListaItem[]>("/pacientes-anamnese");
+}
+
+export function getAnamnesePaciente(id: number) {
+  return apiFetch<AnamneseDetalhe>(`/pacientes/${id}/anamnese`);
 }
