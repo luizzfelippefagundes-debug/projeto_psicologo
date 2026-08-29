@@ -2,9 +2,18 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup"];
+// Rotas públicas de verdade (sem exigir sessão, mas também sem redirecionar quem
+// já está logado — diferente de /login e /signup, que não fazem sentido pra quem
+// já tem sessão. O formulário de anamnese é aberto pelo paciente, sem login, mas
+// a profissional também pode abrir o mesmo link estando logada (ex: pra conferir).
+const ALWAYS_PUBLIC_PATHS = ["/anamnese"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (ALWAYS_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+    return NextResponse.next();
+  }
+
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const hasSession = request.cookies.has("session");
 
