@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -118,16 +117,9 @@ async def enviar_email_sessao(
         logger.exception("Falha ao enviar email de notificação de sessão (tipo=%s)", tipo)
 
 
-async def enviar_email_com_anexo(
-    *,
-    destinatario: str,
-    assunto: str,
-    corpo_html: str,
-    anexo_path: Path,
-    anexo_nome: str,
-) -> None:
+async def enviar_email_link(*, destinatario: str, assunto: str, corpo_html: str) -> None:
     if not settings.resend_api_key:
-        logger.warning("Email com anexo não enviado (Resend não configurado): %s", assunto)
+        logger.warning("Email com link não enviado (Resend não configurado): %s", assunto)
         return
 
     resend.api_key = settings.resend_api_key
@@ -140,16 +132,10 @@ async def enviar_email_com_anexo(
                 "to": destinatario,
                 "subject": assunto,
                 "html": corpo_html,
-                "attachments": [
-                    {
-                        "filename": anexo_nome,
-                        "content": list(anexo_path.read_bytes()),
-                    }
-                ],
             },
         )
     except Exception:
-        logger.exception("Falha ao enviar email com anexo (assunto=%s)", assunto)
+        logger.exception("Falha ao enviar email com link (assunto=%s)", assunto)
 
 
 async def enviar_alerta_crise(
