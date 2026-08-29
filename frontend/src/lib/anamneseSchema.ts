@@ -42,7 +42,6 @@ export const CAMPOS_ADULTO: CampoAnamnese[] = [
   { id: "tea", secao: "Histórico médico — psiquiátrico", label: "TEA", tipo: "booleano" },
   { id: "tdah", secao: "Histórico médico — psiquiátrico", label: "TDAH", tipo: "booleano" },
   { id: "outra_condicao_psiquiatrica", secao: "Histórico médico — psiquiátrico", label: "Outra condição Psicológica ou Neuropsicológica?", tipo: "texto" },
-  { id: "internacoes_psiquiatricas", secao: "Histórico médico — psiquiátrico", label: "Internações psiquiátricas", tipo: "textarea" },
   { id: "doencas_neurologicas_familia", secao: "Histórico familiar", label: "Doenças neurológicas na família (AVC, epilepsia)", tipo: "textarea" },
   { id: "transtornos_psiquiatricos_familia", secao: "Histórico familiar", label: "Transtornos psiquiátricos na família", tipo: "textarea" },
   { id: "febre_infeccao", secao: "Condições atuais", label: "Febre ou infecção?", tipo: "texto" },
