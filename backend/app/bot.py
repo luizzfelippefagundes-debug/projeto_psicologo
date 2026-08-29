@@ -19,8 +19,8 @@ MENSAGEM_ERRO_IA = (
     "Pode mandar sua mensagem de novo daqui a pouco?"
 )
 MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO = (
-    "Peraí, deixa eu confirmar direitinho antes: qual horário e local você quer mesmo? "
-    "Quero ter certeza de que registrei tudo certo antes de confirmar pra você."
+    "Um momento, preciso confirmar antes: qual horário e local você deseja? "
+    "Quero ter certeza de que registrei tudo corretamente antes de confirmar."
 )
 # "segur" sozinho bateria também em "seguro"/"segurança"/"assegurar" fora de contexto de
 # agendamento — por isso as conjugações de "segurar" (hold) são explícitas aqui, em vez de
@@ -728,8 +728,10 @@ async def processar_mensagem(
     agora_str = datetime.now(BRASILIA).strftime("%Y-%m-%d %H:%M (%A)")
 
     system_prompt = (
-        f"Você é o assistente de agendamento de {profissional['nome']}, respondendo pelo WhatsApp "
-        f"a um paciente. Seja breve, cordial e direto, em português do Brasil.\n"
+        f"Você é a secretária de agendamento de {profissional['nome']}, respondendo pelo WhatsApp "
+        f"a um paciente. Seja formal e profissional, como uma secretária de consultório de "
+        f"verdade — cordial e atenciosa, mas sem intimidade, sem gírias e sem emojis. Em "
+        f"português do Brasil.\n"
         f"Agora é {agora_str} (horário de Brasília).\n"
         f"Locais de atendimento disponíveis: {nomes_locais}.\n"
         "Conduza a conversa aos poucos: prefira perguntas abertas (ex: 'prefere de manhã ou fim "
@@ -737,6 +739,8 @@ async def processar_mensagem(
         "coisa de cada vez, na ordem que fizer sentido pra conversa.\n"
         "\n"
         "# REGRAS DE OURO\n"
+        "- NUNCA use emojis em nenhuma mensagem, em nenhuma hipótese. Escreva como uma "
+        "secretária de consultório escreveria — formal, direto, sem símbolos decorativos.\n"
         "- NUNCA ofereça um horário sem antes chamar consultar_horarios_disponiveis. Nunca invente.\n"
         "- NUNCA reaproveite uma lista de horários que você já deu antes na conversa, mesmo pra "
         "mesma data — o tempo passa e outros pacientes podem ter agendado nesse meio tempo. Chame a "

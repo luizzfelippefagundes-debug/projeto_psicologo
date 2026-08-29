@@ -112,8 +112,9 @@ async def checar_lista_espera(
         await evolution.enviar_mensagem_texto(
             whatsapp_instance,
             candidato["paciente_telefone"],
-            f"Boa notícia! Abriu um horário pra você: {data_formatada}. Deixei reservado até as "
-            f"{prazo_formatado} de hoje — é só me confirmar por aqui que eu garanto pra você.",
+            f"Um horário compatível com sua solicitação está disponível: {data_formatada}. Ele "
+            f"ficará reservado até às {prazo_formatado} de hoje. Por favor, confirme por esta "
+            f"mensagem para garantir o agendamento.",
         )
     except Exception:
         logger.exception(
@@ -143,8 +144,8 @@ async def _verificar_expiracao_e_lembrete() -> None:
                     await evolution.enviar_mensagem_texto(
                         sessao["whatsapp_instance"],
                         sessao["paciente_telefone"],
-                        f"Só lembrando: seu horário reservado expira às {prazo_formatado} de hoje. "
-                        "Confirma pra garantir?",
+                        f"Lembramos que seu horário reservado expira às {prazo_formatado} de "
+                        "hoje. Por favor, confirme para garanti-lo.",
                     )
                 except Exception:
                     logger.exception(
