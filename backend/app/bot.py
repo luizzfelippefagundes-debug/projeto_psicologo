@@ -213,6 +213,7 @@ async def criar_agendamento(
     # que não passam pelo endpoint POST /sessoes (visto em produção: paciente agendava pelo
     # WhatsApp e só recebia a anamnese no lembrete de 24h, não na hora da confirmação).
     await anamnese.enviar_anamnese(
+        paciente_id=paciente["id"],
         paciente_email=paciente["email"],
         paciente_telefone=telefone_paciente,
         paciente_nome=paciente["nome"],
@@ -403,6 +404,7 @@ async def confirmar_horario_reservado(profissional_id: int, telefone_paciente: s
         link_teleconsulta=sessao["link_teleconsulta"],
     )
     await anamnese.enviar_anamnese(
+        paciente_id=sessao["paciente_id"],
         paciente_email=paciente["email"],
         paciente_telefone=paciente["telefone"],
         paciente_nome=paciente["nome"],

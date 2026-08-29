@@ -19,7 +19,7 @@ async def verificar_e_enviar_lembretes() -> None:
     async with db.pool.acquire() as conn:
         sessoes = await conn.fetch(
             """
-            SELECT s.id, s.data_hora, s.duracao_minutos, s.modalidade, s.link_teleconsulta,
+            SELECT s.id, s.paciente_id, s.data_hora, s.duracao_minutos, s.modalidade, s.link_teleconsulta,
                    p.nome AS paciente_nome, p.email AS paciente_email, p.telefone AS paciente_telefone,
                    p.tipo_procedimento, p.data_nascimento,
                    l.nome AS local_nome, pr.nome AS profissional_nome, pr.whatsapp_instance
@@ -47,6 +47,7 @@ async def verificar_e_enviar_lembretes() -> None:
                 link_teleconsulta=sessao["link_teleconsulta"],
             )
             await anamnese.enviar_anamnese(
+                paciente_id=sessao["paciente_id"],
                 paciente_email=sessao["paciente_email"],
                 paciente_telefone=sessao["paciente_telefone"],
                 paciente_nome=sessao["paciente_nome"],

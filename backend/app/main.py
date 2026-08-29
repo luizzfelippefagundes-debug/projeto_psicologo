@@ -555,6 +555,7 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
     )
 
     await anamnese.enviar_anamnese(
+        paciente_id=body.paciente_id,
         paciente_email=paciente["email"],
         paciente_telefone=paciente["telefone"],
         paciente_nome=paciente["nome"],
