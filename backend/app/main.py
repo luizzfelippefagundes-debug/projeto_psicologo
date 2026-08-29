@@ -830,6 +830,51 @@ LABELS_PROCEDIMENTO = {
 }
 
 
+class AnamneseRespostaBody(BaseModel):
+    respostas: dict
+
+
+@app.get("/anamnese/{token}")
+async def obter_anamnese_publica(token: str):
+    async with db.pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            """
+            SELECT ar.tipo_formulario, ar.respondido_em, p.nome AS paciente_nome
+            FROM anamnese_respostas ar
+            JOIN pacientes p ON p.id = ar.paciente_id
+            WHERE ar.token = $1
+            """,
+            token,
+        )
+    if linha is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link inválido")
+    return {
+        "paciente_nome": linha["paciente_nome"],
+        "tipo_formulario": linha["tipo_formulario"],
+        "respondido": linha["respondido_em"] is not None,
+    }
+
+
+@app.post("/anamnese/{token}")
+async def responder_anamnese_publica(token: str, body: AnamneseRespostaBody):
+    async with db.pool.acquire() as conn:
+        atual = await conn.fetchrow(
+            "SELECT respondido_em FROM anamnese_respostas WHERE token = $1", token
+        )
+        if atual is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link inválido")
+        if atual["respondido_em"] is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Esse formulário já foi respondido"
+            )
+
+        await conn.execute(
+            "UPDATE anamnese_respostas SET respostas = $1::jsonb, respondido_em = now() WHERE token = $2",
+            json.dumps(body.respostas), token,
+        )
+    return {"ok": True}
+
+
 class ChatMensagem(BaseModel):
     role: str
     content: str
