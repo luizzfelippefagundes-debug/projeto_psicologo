@@ -420,6 +420,45 @@ async def listar_sessoes_paciente(paciente_id: int, profissional_id: int = Depen
     return [dict(row) for row in rows]
 
 
+@app.get("/pacientes-anamnese")
+async def listar_pacientes_anamnese(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT p.id, p.nome, p.telefone, ar.enviado_em, ar.respondido_em
+            FROM pacientes p
+            LEFT JOIN anamnese_respostas ar ON ar.paciente_id = p.id
+            WHERE p.profissional_id = $1
+              AND p.tipo_procedimento = ANY($2::text[])
+            ORDER BY p.nome
+            """,
+            profissional_id, list(anamnese.PROCEDIMENTOS_COM_ANAMNESE),
+        )
+    return [dict(row) for row in rows]
+
+
+@app.get("/pacientes/{paciente_id}/anamnese")
+async def obter_anamnese_paciente(
+    paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        existe = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+        if existe is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+
+        linha = await conn.fetchrow(
+            "SELECT tipo_formulario, respostas, enviado_em, respondido_em FROM anamnese_respostas WHERE paciente_id = $1",
+            paciente_id,
+        )
+    if linha is None:
+        return None
+    resultado = dict(linha)
+    resultado["respostas"] = json.loads(resultado["respostas"]) if resultado["respostas"] else None
+    return resultado
+
+
 @app.get("/sessoes/hoje")
 async def listar_sessoes_hoje(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
