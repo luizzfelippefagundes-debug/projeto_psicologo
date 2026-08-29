@@ -145,9 +145,15 @@ async def _buscar_ou_criar_paciente(
     conn, profissional_id: int, nome_paciente: str, telefone_paciente: str,
     consentimento_lgpd: bool, data_nascimento, procedimento_estimulacao: bool = False,
 ):
+    # Telefone sozinho não identifica o paciente — o mesmo WhatsApp pode marcar consulta pra
+    # mais de uma pessoa da família (ex: mãe liga e agenda pra ela e pro filho). Por isso o
+    # nome também entra no match: telefone igual + nome diferente vira um cadastro novo, não
+    # reaproveita o de outra pessoa (bug real visto em produção — agendamento pro "Lorenzo"
+    # caiu em cima do cadastro de quem já usava aquele número).
     paciente = await conn.fetchrow(
-        "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
-        profissional_id, telefone_paciente,
+        "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes "
+        "WHERE profissional_id = $1 AND telefone = $2 AND nome ILIKE $3",
+        profissional_id, telefone_paciente, nome_paciente,
     )
     if paciente is not None:
         return paciente
@@ -341,12 +347,15 @@ async def entrar_lista_espera(
                 "que ele confirmar."
             )
 
+        # Nome entra no match junto com telefone — o mesmo WhatsApp pode ter mais de uma
+        # pessoa da família na lista de espera do mesmo local ao mesmo tempo.
         existente = await conn.fetchval(
             """
             SELECT id FROM lista_espera
-            WHERE profissional_id = $1 AND local_id = $2 AND paciente_telefone = $3 AND atendido_em IS NULL
+            WHERE profissional_id = $1 AND local_id = $2 AND paciente_telefone = $3
+              AND paciente_nome ILIKE $4 AND atendido_em IS NULL
             """,
-            profissional_id, local["id"], telefone_paciente,
+            profissional_id, local["id"], telefone_paciente, nome_paciente,
         )
         if existente:
             await conn.execute(

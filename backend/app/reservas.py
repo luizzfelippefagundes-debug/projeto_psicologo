@@ -60,9 +60,11 @@ async def checar_lista_espera(
         if candidato is None:
             return
 
+        # Nome entra no match junto com telefone pelo mesmo motivo do bot.py: o mesmo
+        # WhatsApp pode ter mais de um paciente da família na lista de espera.
         paciente = await conn.fetchrow(
-            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2",
-            profissional_id, candidato["paciente_telefone"],
+            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 AND nome ILIKE $3",
+            profissional_id, candidato["paciente_telefone"], candidato["paciente_nome"],
         )
         if paciente is None:
             # consentimento_lgpd fixo em true: entrar_lista_espera já exige consentimento
