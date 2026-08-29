@@ -110,8 +110,8 @@ export default function AnamnesePage() {
   const campoNomeId = estado.campos[0].id;
 
   return (
-    <div className="flex h-screen items-center justify-center p-6" style={ESTILO_CLARO}>
-      <div className="flex max-h-[85vh] w-full max-w-[640px] flex-col rounded-3xl border border-border bg-card shadow-[0_10px_30px_var(--color-shadow)]">
+    <div className="flex min-h-full flex-1 justify-center p-6" style={ESTILO_CLARO}>
+      <div className="flex max-h-[80vh] w-full max-w-[640px] flex-col rounded-3xl border border-border bg-card shadow-[0_10px_30px_var(--color-shadow)]">
         <div className="p-8 pb-4">
           <h1 className="text-xl font-extrabold">Formulário de anamnese</h1>
           <p className="mt-1 text-[14px] text-muted">
