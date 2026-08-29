@@ -94,6 +94,16 @@ CREATE TRIGGER trg_sessoes_calc_fim
     BEFORE INSERT OR UPDATE ON sessoes
     FOR EACH ROW EXECUTE FUNCTION sessoes_calc_fim();
 
+CREATE TABLE anamnese_respostas (
+    id SERIAL PRIMARY KEY,
+    paciente_id INTEGER NOT NULL UNIQUE REFERENCES pacientes(id) ON DELETE CASCADE,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    tipo_formulario VARCHAR(10) NOT NULL CHECK (tipo_formulario IN ('adulto', 'infantil')),
+    respostas JSONB,
+    enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    respondido_em TIMESTAMPTZ
+);
+
 CREATE TABLE lista_espera (
     id SERIAL PRIMARY KEY,
     profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
