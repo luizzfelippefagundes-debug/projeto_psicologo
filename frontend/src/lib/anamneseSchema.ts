@@ -13,6 +13,7 @@ export const CAMPOS_ADULTO: CampoAnamnese[] = [
   { id: "telefone", secao: "Dados de identificação", label: "Telefone", tipo: "texto" },
   { id: "responsavel", secao: "Dados de identificação", label: "Responsável (se aplicável)", tipo: "texto" },
   { id: "profissao", secao: "Dados de identificação", label: "Profissão", tipo: "texto" },
+  { id: "encaminhamento", secao: "Queixa principal", label: "Foi encaminhado ou indicado? Por quem?", tipo: "texto" },
   { id: "inicio_sintomas", secao: "História da doença atual", label: "Início dos sintomas", tipo: "textarea" },
   { id: "fatores_desencadeantes", secao: "História da doença atual", label: "Fatores desencadeantes", tipo: "textarea" },
   { id: "frequencia_intensidade", secao: "História da doença atual", label: "Frequência e intensidade", tipo: "textarea" },
