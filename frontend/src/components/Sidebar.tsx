@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   { href: "/", label: "Visão geral", icon: "🏠" },
   { href: "/pacientes", label: "Pacientes", icon: "🗂️" },
   { href: "/agenda", label: "Agenda", icon: "📅" },
-  { href: "/assistente", label: "Assistente", icon: "🤖" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
 ];
 
