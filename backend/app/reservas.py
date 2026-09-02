@@ -60,10 +60,12 @@ async def checar_lista_espera(
         if candidato is None:
             return
 
-        # Nome entra no match junto com telefone pelo mesmo motivo do bot.py: o mesmo
-        # WhatsApp pode ter mais de um paciente da família na lista de espera.
+        # Primeiro nome entra no match junto com telefone pelo mesmo motivo do bot.py: o mesmo
+        # WhatsApp pode ter mais de um paciente da família na lista de espera, mas o mesmo
+        # paciente pode se identificar de formas diferentes entre conversas (ver bot.py).
         paciente = await conn.fetchrow(
-            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 AND nome ILIKE $3",
+            "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 "
+            "AND split_part(nome, ' ', 1) ILIKE split_part($3, ' ', 1)",
             profissional_id, candidato["paciente_telefone"], candidato["paciente_nome"],
         )
         if paciente is None:

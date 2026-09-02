@@ -147,12 +147,17 @@ async def _buscar_ou_criar_paciente(
 ):
     # Telefone sozinho não identifica o paciente — o mesmo WhatsApp pode marcar consulta pra
     # mais de uma pessoa da família (ex: mãe liga e agenda pra ela e pro filho). Por isso o
-    # nome também entra no match: telefone igual + nome diferente vira um cadastro novo, não
-    # reaproveita o de outra pessoa (bug real visto em produção — agendamento pro "Lorenzo"
-    # caiu em cima do cadastro de quem já usava aquele número).
+    # primeiro nome também entra no match: telefone igual + primeiro nome diferente vira um
+    # cadastro novo, não reaproveita o de outra pessoa (bug real visto em produção —
+    # agendamento pro "Lorenzo" caiu em cima do cadastro de quem já usava aquele número).
+    # Comparar só o primeiro nome (em vez do nome completo) é de propósito: o mesmo paciente
+    # pode se identificar de formas diferentes em conversas diferentes (ex: "Bruno Teste
+    # Estimulação" numa consulta e só "Bruno" na próxima) — exigir o nome completo igual
+    # criava um cadastro duplicado pra ele mesmo (bug real visto testando em produção).
     paciente = await conn.fetchrow(
         "SELECT id, nome, email, tipo_procedimento, data_nascimento FROM pacientes "
-        "WHERE profissional_id = $1 AND telefone = $2 AND nome ILIKE $3",
+        "WHERE profissional_id = $1 AND telefone = $2 "
+        "AND split_part(nome, ' ', 1) ILIKE split_part($3, ' ', 1)",
         profissional_id, telefone_paciente, nome_paciente,
     )
     if paciente is not None:
@@ -347,13 +352,15 @@ async def entrar_lista_espera(
                 "que ele confirmar."
             )
 
-        # Nome entra no match junto com telefone — o mesmo WhatsApp pode ter mais de uma
-        # pessoa da família na lista de espera do mesmo local ao mesmo tempo.
+        # Primeiro nome entra no match junto com telefone — o mesmo WhatsApp pode ter mais de
+        # uma pessoa da família na lista de espera do mesmo local ao mesmo tempo, mas exigir o
+        # nome completo igual duplicava a entrada do mesmo paciente quando ele se identificava
+        # de forma diferente numa conversa depois (ex: só o primeiro nome).
         existente = await conn.fetchval(
             """
             SELECT id FROM lista_espera
             WHERE profissional_id = $1 AND local_id = $2 AND paciente_telefone = $3
-              AND paciente_nome ILIKE $4 AND atendido_em IS NULL
+              AND split_part(paciente_nome, ' ', 1) ILIKE split_part($4, ' ', 1) AND atendido_em IS NULL
             """,
             profissional_id, local["id"], telefone_paciente, nome_paciente,
         )
