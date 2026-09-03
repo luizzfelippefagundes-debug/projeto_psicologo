@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, reservas
+from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Bot de Agendamento — API", lifespan=lifespan)
+
+app.include_router(agendamento_publico.router)
 
 app.add_middleware(
     CORSMiddleware,
