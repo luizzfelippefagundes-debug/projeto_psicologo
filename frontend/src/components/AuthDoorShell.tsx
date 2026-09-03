@@ -17,7 +17,7 @@ export function AuthDoorShell({
 }) {
   return (
     <div
-      className="relative flex min-h-dvh flex-col items-center justify-center gap-6 bg-white p-4 text-[#3a2f2f]"
+      className="relative flex min-h-dvh flex-1 flex-col items-center justify-center gap-6 bg-white p-4 text-[#3a2f2f]"
       style={{ colorScheme: "light" }}
     >
       <div className="flex items-center gap-2.5 text-[15px] font-extrabold">

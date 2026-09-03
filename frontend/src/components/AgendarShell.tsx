@@ -26,14 +26,35 @@ export function AgendarShell({
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--color-bg)]">
-      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
+    <div className="flex min-h-dvh flex-1 flex-col bg-[var(--color-bg)]">
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 lg:px-8">
         <div className="flex min-w-0 items-center gap-2.5 text-[15px] font-extrabold">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[12px] font-extrabold text-accent-dark">
             {iniciais(nomeProfissional)}
           </span>
           <span className="truncate">{nomeProfissional}</span>
         </div>
+
+        {/* Em telas largas a navegação fica aqui no topo — a barra fixa embaixo
+            (pensada pra alcance do polegar no celular) só faz sentido no mobile. */}
+        <nav className="hidden items-center gap-1 lg:flex">
+          {NAV_ITEMS.map((item) => {
+            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2 rounded-full px-3.5 py-2 text-[13.5px] font-semibold transition-colors ${
+                  active ? "bg-accent-soft text-accent-dark" : "text-muted hover:bg-accent-soft hover:text-fg"
+                }`}
+              >
+                <item.Icon className="h-4 w-4" strokeWidth={2} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
           {/* Rotas dentro desse layout só renderizam pra quem já passou pela checagem de
@@ -50,9 +71,9 @@ export function AgendarShell({
         </div>
       </header>
 
-      <main className="flex-1 px-4 pb-24 pt-5 md:px-6">{children}</main>
+      <main className="flex-1 px-4 pb-24 pt-5 lg:px-8 lg:pb-10">{children}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 border-t border-border bg-card">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 border-t border-border bg-card lg:hidden">
         {NAV_ITEMS.map((item) => {
           const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
           return (
