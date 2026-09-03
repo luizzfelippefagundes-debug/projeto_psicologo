@@ -30,6 +30,10 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // /api/* fica de fora — é o proxy pro backend (next.config.ts), não uma página;
-  // chamada sem sessão deve virar 401 do backend, não um redirect pra tela de login
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // chamada sem sessão deve virar 401 do backend, não um redirect pra tela de login.
+  // manifest/sw/ícones do PWA também ficam de fora — o navegador busca isso direto
+  // (às vezes sem cookie) pra checar instalabilidade, e um redirect pro /login quebra isso.
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-.*\\.png|apple-touch-icon.png).*)",
+  ],
 };
