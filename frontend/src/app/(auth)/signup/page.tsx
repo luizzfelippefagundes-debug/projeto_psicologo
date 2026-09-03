@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { signup } from "@/lib/auth-client";
 
@@ -39,8 +40,8 @@ export default function SignupPage() {
 
       <div className="w-full max-w-[400px] rounded-3xl border border-border bg-card p-10 shadow-[0_10px_30px_var(--color-shadow)]">
         <div className="mb-6 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-2xl text-white">
-            🪻
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-white">
+            <Brain className="h-7 w-7" strokeWidth={2.25} />
           </div>
           <div className="text-[18px] font-extrabold tracking-wide text-accent-dark">
             Consultório

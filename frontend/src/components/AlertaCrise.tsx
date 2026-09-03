@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { formatDataHoraBrasilia, type ConversaEscalonada } from "@/lib/format";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
@@ -25,7 +26,8 @@ export function AlertaCrise({ conversas }: { conversas: ConversaEscalonada[] }) 
   return (
     <div className="mb-6 rounded-2xl border-2 border-red-500/40 bg-red-500/5 p-5">
       <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold text-red-600">
-        ⚠️ {conversas.length} conversa{conversas.length > 1 ? "s" : ""} precisa
+        <AlertTriangle className="h-[18px] w-[18px] shrink-0" strokeWidth={2.25} />
+        {conversas.length} conversa{conversas.length > 1 ? "s" : ""} precisa
         {conversas.length > 1 ? "m" : ""} da sua atenção
       </h2>
       <ul className="flex flex-col gap-3">

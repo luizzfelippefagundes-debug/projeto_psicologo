@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Brain, Calendar, Home, LogOut, Menu, Settings, Users } from "lucide-react";
 import { logout } from "@/lib/auth-client";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Visão geral", icon: "🏠" },
-  { href: "/pacientes", label: "Pacientes", icon: "🗂️" },
-  { href: "/agenda", label: "Agenda", icon: "📅" },
-  { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+  { href: "/", label: "Visão geral", Icon: Home },
+  { href: "/pacientes", label: "Pacientes", Icon: Users },
+  { href: "/agenda", label: "Agenda", Icon: Calendar },
+  { href: "/configuracoes", label: "Configurações", Icon: Settings },
 ];
 
 export function Sidebar() {
@@ -32,7 +33,7 @@ export function Sidebar() {
       >
         <div className="flex items-center gap-2.5 text-[17px] font-extrabold text-accent-dark">
           <span className="flex h-8.5 w-8.5 items-center justify-center rounded-[10px] bg-accent text-white">
-            🪻
+            <Brain className="h-4.5 w-4.5" strokeWidth={2.25} />
           </span>
           Consultório
         </div>
@@ -51,7 +52,7 @@ export function Sidebar() {
                     : "text-muted hover:bg-accent-soft hover:text-fg"
                 }`}
               >
-                <span className="w-5 text-center text-[17px]">{item.icon}</span>
+                <item.Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                 {item.label}
               </Link>
             );
@@ -63,7 +64,7 @@ export function Sidebar() {
           onClick={handleLogout}
           className="mt-auto flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[14.5px] font-semibold text-muted transition-colors hover:bg-accent-soft hover:text-fg"
         >
-          <span className="w-5 text-center text-[17px]">🚪</span>
+          <LogOut className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
           Sair
         </button>
       </aside>
@@ -81,7 +82,7 @@ export function Sidebar() {
         onClick={() => setOpen(true)}
         className="fixed left-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-[10px] border-[1.5px] border-border bg-card text-lg md:hidden"
       >
-        ☰
+        <Menu className="h-5 w-5" strokeWidth={2} />
       </button>
     </>
   );

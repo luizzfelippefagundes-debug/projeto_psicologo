@@ -62,7 +62,7 @@
   --color-border: var(--color-border);
   --color-gold: var(--color-gold);
   --color-gold-soft: var(--color-gold-soft);
-  --font-sans: var(--font-nunito);
+  --font-sans: var(--font-inter);
 }
 
 body {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Check, Pencil, Search } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import {
   formatDataHoraBrasilia,
@@ -220,7 +221,7 @@ function PacientesCard({
       <div className="flex items-center justify-between gap-4 border-b border-border p-6">
         <h2 className="text-[16px] font-bold">Todos os pacientes</h2>
         <div className="flex items-center gap-2 rounded-xl border border-border bg-accent-soft px-3 py-2 text-[14px]">
-          🔍
+          <Search className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
           <input
             type="text"
             value={busca}
@@ -291,7 +292,7 @@ function PacientesCard({
                     aria-label="Editar paciente"
                     className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
                   >
-                    ✎
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
                   </button>
                 </div>
               </td>
@@ -574,8 +575,9 @@ export function PacientesTable({
           </div>
 
           {pacienteEditando?.consentimento_lgpd ? (
-            <p className="text-[13px] text-muted">
-              ✓ Consentimento LGPD registrado em{" "}
+            <p className="flex items-center gap-1.5 text-[13px] text-muted">
+              <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+              Consentimento LGPD registrado em{" "}
               {pacienteEditando.consentimento_lgpd_data &&
                 formatDataHoraBrasilia(pacienteEditando.consentimento_lgpd_data)}
             </p>

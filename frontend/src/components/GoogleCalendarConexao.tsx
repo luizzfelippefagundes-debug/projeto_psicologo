@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Check } from "lucide-react";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
@@ -51,8 +52,9 @@ export function GoogleCalendarConexao({ conectado }: { conectado: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3.5 py-1.5 text-[13.5px] font-bold text-accent-dark">
-          ✓ Google Calendar conectado
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3.5 py-1.5 text-[13.5px] font-bold text-accent-dark">
+          <Check className="h-[15px] w-[15px]" strokeWidth={2.5} />
+          Google Calendar conectado
         </span>
         <button
           type="button"

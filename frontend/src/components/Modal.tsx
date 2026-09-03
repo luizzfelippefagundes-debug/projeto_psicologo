@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { X } from "lucide-react";
 
 export function Modal({
   open,
@@ -41,7 +42,7 @@ export function Modal({
             aria-label="Fechar"
             className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
           >
-            ✕
+            <X className="h-4 w-4" strokeWidth={2.25} />
           </button>
         </div>
         {children}

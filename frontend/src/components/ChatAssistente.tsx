@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Bot } from "lucide-react";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
@@ -57,8 +58,8 @@ export function ChatAssistente({
       <div className="flex-1 space-y-3 overflow-y-auto p-5">
         {mensagens.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-2xl">
-              🤖
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft">
+              <Bot className="h-5 w-5" strokeWidth={2} />
             </div>
             <p className="max-w-xs text-[14px]">
               {pacienteId
