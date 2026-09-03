@@ -37,7 +37,7 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
           <span className="flex h-8.5 w-8.5 items-center justify-center rounded-[10px] bg-accent text-white">
             <Brain className="h-4.5 w-4.5" strokeWidth={2.25} />
           </span>
-          Consultório
+          Consultório Psicologia
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
@@ -99,7 +99,7 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
           <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-white">
             <Brain className="h-3.5 w-3.5" strokeWidth={2.25} />
           </span>
-          Consultório
+          Consultório Psicologia
         </div>
         <button
           type="button"

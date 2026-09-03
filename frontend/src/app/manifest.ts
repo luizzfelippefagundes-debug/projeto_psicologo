@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Consultório",
+    name: "Consultório Psicologia",
     short_name: "Consultório",
     description: "Painel de agendamento e gestão do consultório",
     start_url: "/",

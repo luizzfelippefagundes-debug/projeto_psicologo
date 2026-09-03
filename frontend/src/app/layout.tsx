@@ -12,12 +12,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Consultório",
+  title: "Consultório Psicologia",
   description: "Painel de agendamento e gestão do consultório",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Consultório",
+    title: "Consultório Psicologia",
   },
   icons: {
     apple: "/apple-touch-icon.png",

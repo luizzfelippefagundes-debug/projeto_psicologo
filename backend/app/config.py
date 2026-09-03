@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
     resend_api_key: str | None = None
-    resend_from_email: str = "Consultório <onboarding@resend.dev>"
+    resend_from_email: str = "Consultório Psicologia <onboarding@resend.dev>"
     google_client_id: str | None = None
     google_client_secret: str | None = None
     clerk_issuer: str | None = None  # ex: https://exemplo-123.clerk.accounts.dev

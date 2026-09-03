@@ -40,7 +40,7 @@ export default function LoginPage() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-white">
             <Brain className="h-7 w-7" strokeWidth={2.25} />
           </div>
-          <div className="text-[18px] font-extrabold tracking-wide text-fg">Consultório</div>
+          <div className="text-[18px] font-extrabold tracking-wide text-fg">Consultório Psicologia</div>
         </div>
 
         <h1 className="mb-2 text-center text-[26px] font-extrabold">Bem-vinda de volta</h1>
