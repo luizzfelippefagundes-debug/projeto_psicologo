@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -11,6 +12,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
+INTERVALO_SINCRONIZACAO = timedelta(minutes=10)
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -279,3 +281,27 @@ async def puxar_eventos_do_google(profissional_id: int) -> dict:
         )
 
     return {"criados": criados, "atualizados": atualizados, "removidos": removidos, "ignorados": ignorados}
+
+
+async def _sincronizar_todos_conectados() -> None:
+    async with db.pool.acquire() as conn:
+        profissionais_ids = await conn.fetchval(
+            "SELECT array_agg(profissional_id) FROM google_conexoes"
+        )
+    for profissional_id in profissionais_ids or []:
+        try:
+            await puxar_eventos_do_google(profissional_id)
+        except Exception:
+            logger.exception(
+                "Erro na sincronização automática do Google Calendar (profissional_id=%s)",
+                profissional_id,
+            )
+
+
+async def loop_sincronizacao() -> None:
+    while True:
+        try:
+            await _sincronizar_todos_conectados()
+        except Exception:
+            logger.exception("Erro no loop de sincronização do Google Calendar")
+        await asyncio.sleep(INTERVALO_SINCRONIZACAO.total_seconds())

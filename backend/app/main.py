@@ -24,9 +24,11 @@ async def lifespan(app: FastAPI):
     await db.connect()
     tarefa_lembretes = asyncio.create_task(lembretes.loop_lembretes())
     tarefa_holds = asyncio.create_task(reservas.loop_expiracao_holds())
+    tarefa_google_sync = asyncio.create_task(google_calendar.loop_sincronizacao())
     yield
     tarefa_lembretes.cancel()
     tarefa_holds.cancel()
+    tarefa_google_sync.cancel()
     await db.disconnect()
 
 
