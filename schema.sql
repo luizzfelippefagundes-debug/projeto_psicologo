@@ -10,6 +10,7 @@ CREATE TABLE profissionais (
     senha_hash TEXT NOT NULL,
     whatsapp_instance VARCHAR(100) UNIQUE, -- nome da instância na Evolution API, preenchido ao parear o número
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- slug VARCHAR UNIQUE (link público de agendamento, ver docs/superpowers/specs/2026-09-03-agendamento-paciente-web-design.md)
 );
 
 CREATE TABLE locais (
@@ -54,6 +55,7 @@ CREATE TABLE pacientes (
     consentimento_lgpd_data TIMESTAMPTZ,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (profissional_id, telefone)
+    -- clerk_user_id VARCHAR (login do paciente via Clerk, agendamento web, ver docs/superpowers/specs/2026-09-03-agendamento-paciente-web-design.md)
 );
 
 CREATE TABLE sessoes (
