@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
 const inter = Inter({
@@ -9,8 +10,20 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Psci",
+  title: "Consultório",
   description: "Painel de agendamento e gestão do consultório",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Consultório",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#a8768a",
 };
 
 const themeInitScript = `
@@ -33,6 +46,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex antialiased" suppressHydrationWarning>
+        <PwaRegister />
         {children}
       </body>
     </html>

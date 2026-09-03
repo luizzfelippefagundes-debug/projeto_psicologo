@@ -70,7 +70,8 @@ function ContatosCard({
           agendamento.
         </p>
       </div>
-      <table className="w-full border-collapse">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse">
         <thead>
           <tr>
             {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
@@ -115,6 +116,7 @@ function ContatosCard({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -134,7 +136,8 @@ function AnamnesesCard({
           Pacientes com procedimento de estimulação/neuromodulação e o status do formulário.
         </p>
       </div>
-      <table className="w-full border-collapse">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse">
         <thead>
           <tr>
             {["Paciente", "Telefone", "Status", ""].map((col) => (
@@ -195,6 +198,7 @@ function AnamnesesCard({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -232,7 +236,8 @@ function PacientesCard({
         </div>
       </div>
 
-      <table className="w-full border-collapse">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] border-collapse">
         <thead>
           <tr>
             {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map((col) => (
@@ -307,6 +312,7 @@ function PacientesCard({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
