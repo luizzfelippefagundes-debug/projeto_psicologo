@@ -1,11 +1,11 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import anthropic
 import asyncpg
 
-from app import anamnese, db, notificacoes, reservas
+from app import agendamento, anamnese, db, notificacoes, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -66,82 +66,14 @@ MAX_TOKENS_RESPOSTA = 1024
 MAX_RODADAS_FERRAMENTA = 4
 
 
-def _dia_semana_banco(d: date) -> int:
-    # Python: segunda=0..domingo=6 | Banco: domingo=0..sábado=6
-    return (d.weekday() + 1) % 7
-
-
 async def horarios_disponiveis(
     profissional_id: int, local_nome: str, data_str: str, duracao_minutos: int = 50
 ) -> list[str]:
     async with db.pool.acquire() as conn:
-        local = await conn.fetchrow(
-            "SELECT id FROM locais WHERE profissional_id = $1 AND nome ILIKE $2",
-            profissional_id, local_nome,
-        )
-        if local is None:
-            raise ValueError(f"Não encontrei o local '{local_nome}'.")
-
-        data = date.fromisoformat(data_str)
-        dia_semana = _dia_semana_banco(data)
-
-        regras = await conn.fetch(
-            """
-            SELECT hora_inicio, hora_fim FROM regras_horario
-            WHERE profissional_id = $1 AND local_id = $2 AND dia_semana = $3 AND ativo
-            ORDER BY hora_inicio
-            """,
-            profissional_id, local["id"], dia_semana,
-        )
-        if not regras:
-            return []
-
-        ocupados = await conn.fetch(
-            """
-            SELECT data_hora, duracao_minutos FROM sessoes
-            WHERE profissional_id = $1 AND local_id = $2
-              AND data_hora::date = $3 AND status <> 'cancelada'
-            """,
-            profissional_id, local["id"], data,
-        )
-        janelas_ocupadas = [
-            (row["data_hora"], row["data_hora"] + timedelta(minutes=row["duracao_minutos"]))
-            for row in ocupados
-        ]
-
-        # Bloqueios (compromisso pessoal do Google Calendar, ou bloqueado manualmente na
-        # agenda) também contam como indisponibilidade — sem isso, o bot podia oferecer um
-        # horário que a profissional já tem ocupado fora do sistema.
-        bloqueios = await conn.fetch(
-            """
-            SELECT data_inicio, data_fim FROM bloqueios_horario
-            WHERE profissional_id = $1 AND (local_id IS NULL OR local_id = $2)
-              AND data_inicio::date <= $3 AND data_fim::date >= $3
-            """,
-            profissional_id, local["id"], data,
-        )
-        janelas_ocupadas += [(row["data_inicio"], row["data_fim"]) for row in bloqueios]
-
-    livres: list[str] = []
-    passo = timedelta(minutes=30)
-    duracao = timedelta(minutes=duracao_minutos)
-    agora = datetime.now(BRASILIA)
-
-    for regra in regras:
-        inicio = datetime.combine(data, regra["hora_inicio"], tzinfo=BRASILIA)
-        fim_janela = datetime.combine(data, regra["hora_fim"], tzinfo=BRASILIA)
-        candidato = inicio
-        while candidato + duracao <= fim_janela:
-            candidato_fim = candidato + duracao
-            conflito = candidato < agora or any(
-                candidato < oc_fim and candidato_fim > oc_inicio
-                for oc_inicio, oc_fim in janelas_ocupadas
-            )
-            if not conflito:
-                livres.append(candidato.strftime("%H:%M"))
-            candidato += passo
-
-    return livres
+        local = await _buscar_local(conn, profissional_id, local_nome)
+    return await agendamento.horarios_disponiveis(
+        profissional_id, local["id"], date.fromisoformat(data_str), duracao_minutos
+    )
 
 
 async def _buscar_local(conn, profissional_id: int, local_nome: str):
