@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Calendar, Home, LogOut, Menu, Settings, Users } from "lucide-react";
+import { Brain, Calendar, Home, LogOut, Menu, Settings, Users } from "lucide-react";
 import { logout } from "@/lib/auth-client";
 
 const NAV_ITEMS = [
@@ -31,7 +31,12 @@ export function Sidebar() {
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="text-[17px] font-extrabold text-fg">Consultório</div>
+        <div className="flex items-center gap-2.5 text-[17px] font-extrabold text-fg">
+          <span className="flex h-8.5 w-8.5 items-center justify-center rounded-[10px] bg-accent text-white">
+            <Brain className="h-4.5 w-4.5" strokeWidth={2.25} />
+          </span>
+          Consultório
+        </div>
 
         <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
