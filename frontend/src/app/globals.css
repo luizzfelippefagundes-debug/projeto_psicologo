@@ -3,9 +3,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --color-accent: #2563eb;
-  --color-accent-dark: #1d4ed8;
-  --color-accent-soft: #e1eafd;
+  --color-accent: #a8768a;
+  --color-accent-dark: #8f5f73;
+  --color-accent-soft: #f3e8ec;
   --color-bg: #ede6e1;
   --color-bg-grad-start: #f0e9e4;
   --color-bg-grad-end: #e3d9d3;
@@ -27,9 +27,9 @@
 }
 
 .dark {
-  --color-accent: #5b93f5;
-  --color-accent-dark: #7fb0ff;
-  --color-accent-soft: #1c2c4d;
+  --color-accent: #d4a3b8;
+  --color-accent-dark: #e0b8c9;
+  --color-accent-soft: #3a2a30;
   --color-bg: #1c1517;
   --color-bg-grad-start: #171214;
   --color-bg-grad-end: #211a1c;
