@@ -92,7 +92,16 @@ export function AgendamentoPublicoFluxo({
         <h1 className="mb-1 text-2xl font-extrabold">{profissional.nome}</h1>
         <p className="mb-6 text-[14.5px] text-muted">Agende sua consulta</p>
 
-        <Show when="signed-in" fallback={<SignIn routing="hash" />}>
+        <Show
+          when="signed-in"
+          fallback={
+            <SignIn
+              routing="hash"
+              forceRedirectUrl={`/agendar/${slug}`}
+              signUpForceRedirectUrl={`/agendar/${slug}`}
+            />
+          }
+        >
           {confirmado ? (
             <p className="text-[15px] font-semibold text-accent-dark">
               Consulta agendada! Você pode ver em &quot;Minhas consultas&quot;.
