@@ -94,7 +94,7 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
         />
       )}
 
-      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-sidebar px-4 md:hidden">
+      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-[var(--color-bg)] px-4 md:hidden">
         <div className="flex items-center gap-2 text-[15.5px] font-extrabold text-fg">
           <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-white">
             <Brain className="h-3.5 w-3.5" strokeWidth={2.25} />
