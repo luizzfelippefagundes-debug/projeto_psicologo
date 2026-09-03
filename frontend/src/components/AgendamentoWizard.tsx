@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { agendarPublico, getHorariosPublico, type ProfissionalPublico } from "@/lib/apiPublico";
 import { Select } from "@/components/Select";
+import { AgendarDataPicker } from "@/components/AgendarDataPicker";
 import { formatDiaMesCurto, formatDiaSemanaCurto, getTodayISO } from "@/lib/format";
 
-const PASSOS = ["Local", "Data", "Horário", "Confirmar"];
+const PASSOS = ["Local", "Horário", "Confirmar"];
 
 const CAMPO_CLASSE =
   "rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent";
@@ -107,7 +108,7 @@ export function AgendamentoWizard({
   }, [localId, data]);
 
   useEffect(() => {
-    if (passo !== 3 || !localId || !data) return;
+    if (passo !== 2 || !localId || !data) return;
     setCarregandoHorarios(true);
     getToken().then((token) => {
       if (!token) return;
@@ -152,146 +153,131 @@ export function AgendamentoWizard({
   return (
     <div className="mx-auto w-full max-w-[480px]">
       {confirmado ? (
-          <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_8px_24px_var(--color-shadow)]">
-            <p className="text-[15px] font-semibold text-accent-dark">Consulta agendada!</p>
-            <button
-              type="button"
-              onClick={() => router.push(`/agendar/${slug}/minhas-sessoes`)}
-              className="mt-4 rounded-xl bg-accent px-5 py-2.5 text-[14px] font-bold text-white"
-            >
-              Ver minhas consultas
-            </button>
-          </div>
-        ) : (
-          <>
-            <StepIndicator atual={passo} />
-            <h1 className="mb-5 text-center text-xl font-extrabold">{PASSOS[passo - 1]}</h1>
+        <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_8px_24px_var(--color-shadow)]">
+          <p className="text-[15px] font-semibold text-accent-dark">Consulta agendada!</p>
+          <button
+            type="button"
+            onClick={() => router.push(`/agendar/${slug}/minhas-sessoes`)}
+            className="mt-4 rounded-xl bg-accent px-5 py-2.5 text-[14px] font-bold text-white"
+          >
+            Ver minhas consultas
+          </button>
+        </div>
+      ) : (
+        <>
+          <AgendarDataPicker dataSelecionada={data} onSelect={setData} />
+          <StepIndicator atual={passo} />
+          <h1 className="mb-5 text-center text-xl font-extrabold">{PASSOS[passo - 1]}</h1>
 
-            {passo === 1 && (
-              <div className="flex flex-col gap-4">
-                <Select
-                  value={localId}
-                  onChange={setLocalId}
-                  options={profissional.locais.map((l) => ({ value: String(l.id), label: l.nome }))}
-                />
-                <div className="flex gap-3">
-                  <BotaoAvancar onClick={() => setPasso(2)} disabled={!localId} />
-                </div>
+          {passo === 1 && (
+            <div className="flex flex-col gap-4">
+              <Select
+                value={localId}
+                onChange={setLocalId}
+                options={profissional.locais.map((l) => ({ value: String(l.id), label: l.nome }))}
+              />
+              <div className="flex gap-3">
+                <BotaoAvancar onClick={() => setPasso(2)} disabled={!localId} />
               </div>
-            )}
+            </div>
+          )}
 
-            {passo === 2 && (
-              <div className="flex flex-col gap-4">
-                <input
-                  type="date"
-                  value={data}
-                  min={getTodayISO()}
-                  onChange={(e) => setData(e.target.value)}
-                  className={CAMPO_CLASSE}
-                />
-                <div className="flex gap-3">
-                  <BotaoVoltar onClick={() => setPasso(1)} />
-                  <BotaoAvancar onClick={() => setPasso(3)} disabled={!data} />
-                </div>
+          {passo === 2 && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-2">
+                {carregandoHorarios ? (
+                  <p className="text-[13.5px] text-muted">Carregando horários...</p>
+                ) : horarios.length === 0 ? (
+                  <p className="text-[13.5px] text-muted">Nenhum horário livre nesse dia.</p>
+                ) : (
+                  horarios.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setHorarioEscolhido(h)}
+                      className={`rounded-xl px-3.5 py-2 text-[13.5px] font-bold ${
+                        horarioEscolhido === h ? "bg-accent text-white" : "border border-border bg-card"
+                      }`}
+                    >
+                      {h}
+                    </button>
+                  ))
+                )}
               </div>
-            )}
-
-            {passo === 3 && (
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap gap-2">
-                  {carregandoHorarios ? (
-                    <p className="text-[13.5px] text-muted">Carregando horários...</p>
-                  ) : horarios.length === 0 ? (
-                    <p className="text-[13.5px] text-muted">Nenhum horário livre nesse dia.</p>
-                  ) : (
-                    horarios.map((h) => (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => setHorarioEscolhido(h)}
-                        className={`rounded-xl px-3.5 py-2 text-[13.5px] font-bold ${
-                          horarioEscolhido === h ? "bg-accent text-white" : "border border-border bg-card"
-                        }`}
-                      >
-                        {h}
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="flex gap-3">
-                  <BotaoVoltar onClick={() => setPasso(2)} />
-                  <BotaoAvancar onClick={() => setPasso(4)} disabled={!horarioEscolhido} />
-                </div>
+              <div className="flex gap-3">
+                <BotaoVoltar onClick={() => setPasso(1)} />
+                <BotaoAvancar onClick={() => setPasso(3)} disabled={!horarioEscolhido} />
               </div>
-            )}
+            </div>
+          )}
 
-            {passo === 4 && horarioEscolhido && (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_4px_14px_var(--color-shadow)]">
-                  <LinhaResumo label="Profissional" valor={profissional.nome} />
-                  <LinhaResumo label="Local" valor={localNome} />
-                  <LinhaResumo
-                    label="Data"
-                    valor={`${formatDiaSemanaCurto(data)}, ${formatDiaMesCurto(data)}`}
-                  />
-                  <LinhaResumo label="Horário" valor={horarioEscolhido} />
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Nome completo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className={CAMPO_CLASSE}
+          {passo === 3 && horarioEscolhido && (
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_4px_14px_var(--color-shadow)]">
+                <LinhaResumo label="Profissional" valor={profissional.nome} />
+                <LinhaResumo label="Local" valor={localNome} />
+                <LinhaResumo
+                  label="Data"
+                  valor={`${formatDiaSemanaCurto(data)}, ${formatDiaMesCurto(data)}`}
                 />
-                <input
-                  type="tel"
-                  placeholder="Telefone (WhatsApp)"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  className={CAMPO_CLASSE}
-                />
-                <input
-                  type="date"
-                  placeholder="Data de nascimento"
-                  value={dataNascimento}
-                  onChange={(e) => setDataNascimento(e.target.value)}
-                  className={CAMPO_CLASSE}
-                />
-                <Select
-                  value={estimulacao}
-                  onChange={(v) => setEstimulacao(v as "sim" | "nao")}
-                  placeholder="É consulta de estimulação/tDCS?"
-                  options={[
-                    { value: "nao", label: "Não, é consulta regular" },
-                    { value: "sim", label: "Sim, é estimulação/tDCS" },
-                  ]}
-                />
-                <label className="flex items-start gap-2.5 text-[13.5px]">
-                  <input
-                    type="checkbox"
-                    checked={lgpd}
-                    onChange={(e) => setLgpd(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
-                  />
-                  <span>Concordo com o tratamento dos meus dados de saúde, conforme a LGPD.</span>
-                </label>
-
-                {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
-
-                <div className="flex gap-3">
-                  <BotaoVoltar onClick={() => setPasso(3)} />
-                  <button
-                    type="button"
-                    onClick={confirmar}
-                    disabled={carregando || !nome || !telefone || !lgpd}
-                    className="flex-1 rounded-xl bg-accent px-5 py-2.5 text-[14px] font-bold text-white disabled:opacity-60"
-                  >
-                    {carregando ? "Agendando..." : "Confirmar agendamento"}
-                  </button>
-                </div>
+                <LinhaResumo label="Horário" valor={horarioEscolhido} />
               </div>
-            )}
+
+              <input
+                type="text"
+                placeholder="Nome completo"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                className={CAMPO_CLASSE}
+              />
+              <input
+                type="tel"
+                placeholder="Telefone (WhatsApp)"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                className={CAMPO_CLASSE}
+              />
+              <input
+                type="date"
+                placeholder="Data de nascimento"
+                value={dataNascimento}
+                onChange={(e) => setDataNascimento(e.target.value)}
+                className={CAMPO_CLASSE}
+              />
+              <Select
+                value={estimulacao}
+                onChange={(v) => setEstimulacao(v as "sim" | "nao")}
+                placeholder="É consulta de estimulação/tDCS?"
+                options={[
+                  { value: "nao", label: "Não, é consulta regular" },
+                  { value: "sim", label: "Sim, é estimulação/tDCS" },
+                ]}
+              />
+              <label className="flex items-start gap-2.5 text-[13.5px]">
+                <input
+                  type="checkbox"
+                  checked={lgpd}
+                  onChange={(e) => setLgpd(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+                />
+                <span>Concordo com o tratamento dos meus dados de saúde, conforme a LGPD.</span>
+              </label>
+
+              {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
+
+              <div className="flex gap-3">
+                <BotaoVoltar onClick={() => setPasso(2)} />
+                <button
+                  type="button"
+                  onClick={confirmar}
+                  disabled={carregando || !nome || !telefone || !lgpd}
+                  className="flex-1 rounded-xl bg-accent px-5 py-2.5 text-[14px] font-bold text-white disabled:opacity-60"
+                >
+                  {carregando ? "Agendando..." : "Confirmar agendamento"}
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
