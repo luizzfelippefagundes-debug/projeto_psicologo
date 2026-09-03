@@ -1,11 +1,9 @@
-import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { AgendaList } from "@/components/AgendaList";
 import { AgendaDatePicker } from "@/components/AgendaDatePicker";
 import { getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
-import { addDaysISO, formatDiaMesCurto, formatDiaSemanaCurto, getTodayISO } from "@/lib/format";
+import { getTodayISO } from "@/lib/format";
 
 export default async function AgendaPage({
   searchParams,
@@ -34,43 +32,18 @@ export default async function AgendaPage({
     );
   }
 
-  const hojeISO = getTodayISO();
-  const diaISO = data ?? hojeISO;
+  const diaISO = data ?? getTodayISO();
   const [sessoes, pacientes] = await Promise.all([
     getSessoesPeriodo(diaISO, diaISO),
     getPacientes(),
   ]);
 
-  const diaAnterior = addDaysISO(diaISO, -1);
-  const diaSeguinte = addDaysISO(diaISO, 1);
-
   return (
     <div>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold">Agenda</h1>
-          <p className="mt-1 text-[14.5px] text-muted">
-            {formatDiaSemanaCurto(diaISO)}, {formatDiaMesCurto(diaISO)}
-          </p>
-        </div>
+        <h1 className="text-2xl font-extrabold">Agenda</h1>
         <div className="flex items-center gap-3">
           <AgendaDatePicker diaSelecionadoISO={diaISO} />
-          <div className="flex overflow-hidden rounded-xl border border-border">
-            <Link
-              href={`/agenda?data=${diaAnterior}`}
-              aria-label="Dia anterior"
-              className="flex items-center border-r border-border bg-card px-3 py-2"
-            >
-              <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
-            </Link>
-            <Link
-              href={`/agenda?data=${diaSeguinte}`}
-              aria-label="Próximo dia"
-              className="flex items-center bg-card px-3 py-2"
-            >
-              <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
-            </Link>
-          </div>
           <ThemeToggle />
         </div>
       </div>
