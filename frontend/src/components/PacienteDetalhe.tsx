@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ChatAssistente } from "@/components/ChatAssistente";
 import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamneseSchema";
 import {
   formatDataHoraBrasilia,
@@ -12,7 +11,7 @@ import {
   type SessaoHistorico,
 } from "@/lib/format";
 
-const ABAS = ["Visão geral", "Histórico de sessões", "Anamnese", "Assistente IA"] as const;
+const ABAS = ["Visão geral", "Histórico de sessões", "Anamnese"] as const;
 type Aba = (typeof ABAS)[number];
 
 const STATUS_SESSAO_LABEL: Record<string, string> = {
@@ -194,13 +193,6 @@ export function PacienteDetalhe({
             </>
           )}
         </div>
-      )}
-
-      {aba === "Assistente IA" && (
-        <ChatAssistente
-          pacienteId={paciente.id}
-          sugestoes={["Resuma o histórico desse paciente", "Quais os próximos passos sugeridos?"]}
-        />
       )}
     </div>
   );

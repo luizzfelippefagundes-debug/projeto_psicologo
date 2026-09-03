@@ -71,53 +71,77 @@ function ContatosCard({
           agendamento.
         </p>
       </div>
-      <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] border-collapse">
-        <thead>
-          <tr>
-            {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
-              <th
-                key={col}
-                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+      {contatos.length === 0 ? (
+        <p className="px-6 py-8 text-center text-[14px] text-muted">
+          Ninguém conversou com o bot ainda.
+        </p>
+      ) : (
+        <>
+          <ul className="flex flex-col md:hidden">
+            {contatos.map((c) => (
+              <li
+                key={c.telefone_paciente}
+                className="flex flex-col gap-2.5 border-b border-border px-5 py-4 last:border-0"
               >
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {contatos.map((c) => (
-            <tr key={c.telefone_paciente}>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
-                {c.nome_whatsapp ?? "Não informado"}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {c.telefone_paciente}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {formatDataHoraBrasilia(c.atualizado_em)}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-right">
+                <div>
+                  <div className="text-[14.5px] font-bold">{c.nome_whatsapp ?? "Não informado"}</div>
+                  <div className="text-[12.5px] text-muted">
+                    {c.telefone_paciente} · {formatDataHoraBrasilia(c.atualizado_em)}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => onCadastrar(c)}
-                  className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                  className="self-start rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
                 >
                   Cadastrar como paciente
                 </button>
-              </td>
-            </tr>
-          ))}
-          {contatos.length === 0 && (
-            <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
-                Ninguém conversou com o bot ainda.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[560px] border-collapse">
+              <thead>
+                <tr>
+                  {["Nome", "Telefone", "Última mensagem", ""].map((col) => (
+                    <th
+                      key={col}
+                      className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {contatos.map((c) => (
+                  <tr key={c.telefone_paciente}>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
+                      {c.nome_whatsapp ?? "Não informado"}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {c.telefone_paciente}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {formatDataHoraBrasilia(c.atualizado_em)}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onCadastrar(c)}
+                        className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                      >
+                        Cadastrar como paciente
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -137,69 +161,110 @@ function AnamnesesCard({
           Pacientes com procedimento de estimulação/neuromodulação e o status do formulário.
         </p>
       </div>
-      <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] border-collapse">
-        <thead>
-          <tr>
-            {["Paciente", "Telefone", "Status", ""].map((col) => (
-              <th
-                key={col}
-                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+      {itens.length === 0 ? (
+        <p className="px-6 py-8 text-center text-[14px] text-muted">
+          Nenhum paciente com procedimento de estimulação cadastrado ainda.
+        </p>
+      ) : (
+        <>
+          <ul className="flex flex-col md:hidden">
+            {itens.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-col gap-2.5 border-b border-border px-5 py-4 last:border-0"
               >
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {itens.map((item) => (
-            <tr key={item.id}>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
-                {item.nome}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {item.telefone}
-              </td>
-              <td className="border-b border-border px-6 py-4">
-                <span
-                  className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
-                    item.respondido_em
-                      ? "bg-accent-soft text-accent-dark"
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[14.5px] font-bold">{item.nome}</div>
+                    <div className="text-[12.5px] text-muted">{item.telefone}</div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                      item.respondido_em
+                        ? "bg-accent-soft text-accent-dark"
+                        : item.enviado_em
+                          ? "bg-gold-soft text-gold"
+                          : "bg-black/5 text-muted"
+                    }`}
+                  >
+                    {item.respondido_em
+                      ? `Respondido em ${formatDataHoraBrasilia(item.respondido_em)}`
                       : item.enviado_em
-                        ? "bg-gold-soft text-gold"
-                        : "bg-black/5 text-muted"
-                  }`}
-                >
-                  {item.respondido_em
-                    ? `Respondido em ${formatDataHoraBrasilia(item.respondido_em)}`
-                    : item.enviado_em
-                      ? "Aguardando resposta"
-                      : "Não enviado"}
-                </span>
-              </td>
-              <td className="border-b border-border px-6 py-4 text-right">
+                        ? "Aguardando resposta"
+                        : "Não enviado"}
+                  </span>
+                </div>
                 {item.respondido_em && (
                   <button
                     type="button"
                     onClick={() => onVer(item.id)}
-                    className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                    className="self-start rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
                   >
                     Ver respostas
                   </button>
                 )}
-              </td>
-            </tr>
-          ))}
-          {itens.length === 0 && (
-            <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-[14px] text-muted">
-                Nenhum paciente com procedimento de estimulação cadastrado ainda.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[560px] border-collapse">
+              <thead>
+                <tr>
+                  {["Paciente", "Telefone", "Status", ""].map((col) => (
+                    <th
+                      key={col}
+                      className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((item) => (
+                  <tr key={item.id}>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] font-bold last:border-0">
+                      {item.nome}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {item.telefone}
+                    </td>
+                    <td className="border-b border-border px-6 py-4">
+                      <span
+                        className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                          item.respondido_em
+                            ? "bg-accent-soft text-accent-dark"
+                            : item.enviado_em
+                              ? "bg-gold-soft text-gold"
+                              : "bg-black/5 text-muted"
+                        }`}
+                      >
+                        {item.respondido_em
+                          ? `Respondido em ${formatDataHoraBrasilia(item.respondido_em)}`
+                          : item.enviado_em
+                            ? "Aguardando resposta"
+                            : "Não enviado"}
+                      </span>
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-right">
+                      {item.respondido_em && (
+                        <button
+                          type="button"
+                          onClick={() => onVer(item.id)}
+                          className="rounded-xl border border-border px-3 py-1.5 text-[13px] font-bold text-fg hover:bg-accent-soft"
+                        >
+                          Ver respostas
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
