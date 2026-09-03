@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { Select } from "@/components/Select";
 import {
   formatHoraBrasilia,
   type Local,
@@ -177,6 +178,11 @@ export function AgendaList({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
+    if (!form.pacienteId) {
+      setErro("Selecione um paciente.");
+      return;
+    }
+
     if (sessaoEditando) {
       const original = sessaoParaFormState(sessaoEditando);
       const mudouHorario = original.data !== form.data || original.hora !== form.hora;
@@ -339,41 +345,25 @@ export function AgendaList({
             <label htmlFor="paciente" className="mb-1.5 text-sm font-semibold">
               Paciente
             </label>
-            <select
+            <Select
               id="paciente"
-              required
               value={form.pacienteId}
-              onChange={(e) => setForm({ ...form, pacienteId: e.target.value })}
-              className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-            >
-              <option value="" disabled>
-                Selecione um paciente
-              </option>
-              {pacientes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setForm({ ...form, pacienteId: value })}
+              placeholder="Selecione um paciente"
+              options={pacientes.map((p) => ({ value: String(p.id), label: p.nome }))}
+            />
           </div>
 
           <div className="flex flex-col">
             <label htmlFor="local" className="mb-1.5 text-sm font-semibold">
               Local
             </label>
-            <select
+            <Select
               id="local"
-              required
               value={form.localId}
-              onChange={(e) => setForm({ ...form, localId: e.target.value })}
-              className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-            >
-              {locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setForm({ ...form, localId: value })}
+              options={locais.map((l) => ({ value: String(l.id), label: l.nome }))}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -425,17 +415,17 @@ export function AgendaList({
               <label htmlFor="modalidade" className="mb-1.5 text-sm font-semibold">
                 Modalidade
               </label>
-              <select
+              <Select
                 id="modalidade"
                 value={form.modalidade}
-                onChange={(e) =>
-                  setForm({ ...form, modalidade: e.target.value as "presencial" | "teleconsulta" })
+                onChange={(value) =>
+                  setForm({ ...form, modalidade: value as "presencial" | "teleconsulta" })
                 }
-                className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-              >
-                <option value="presencial">Presencial</option>
-                <option value="teleconsulta">Teleconsulta</option>
-              </select>
+                options={[
+                  { value: "presencial", label: "Presencial" },
+                  { value: "teleconsulta", label: "Teleconsulta" },
+                ]}
+              />
             </div>
           </div>
 

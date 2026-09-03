@@ -2,7 +2,51 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Select } from "@/components/Select";
 import { DIAS_SEMANA, formatHoraCurta, type Local, type RegraHorario } from "@/lib/format";
+
+// Junta regras do mesmo horário (ex: Segunda a Sexta, 08:00-18:00 cada uma como uma
+// linha separada) numa única linha, pra não parecer repetição/duplicata na tela.
+function agruparPorHorario(regras: RegraHorario[]) {
+  const grupos = new Map<string, { horaInicio: string; horaFim: string; regras: RegraHorario[] }>();
+  for (const regra of regras) {
+    const chave = `${regra.hora_inicio}-${regra.hora_fim}`;
+    const grupo = grupos.get(chave);
+    if (grupo) {
+      grupo.regras.push(regra);
+    } else {
+      grupos.set(chave, { horaInicio: regra.hora_inicio, horaFim: regra.hora_fim, regras: [regra] });
+    }
+  }
+  return Array.from(grupos.values()).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+}
+
+function formatarDias(regras: RegraHorario[]): string {
+  const dias = [...new Set(regras.map((r) => r.dia_semana))].sort((a, b) => a - b);
+  if (dias.length === 7) return "Todos os dias";
+  if (dias.length === 5 && dias.every((d, i) => d === i + 1)) return "Dias úteis (Seg a Sex)";
+
+  // Compacta sequências consecutivas (ex: [1,2,3] vira "Seg a Qua")
+  const partes: string[] = [];
+  let inicio = dias[0];
+  let fim = dias[0];
+  for (let i = 1; i <= dias.length; i++) {
+    if (i < dias.length && dias[i] === fim + 1) {
+      fim = dias[i];
+      continue;
+    }
+    partes.push(
+      fim > inicio
+        ? `${DIAS_SEMANA[inicio].slice(0, 3)} a ${DIAS_SEMANA[fim].slice(0, 3)}`
+        : DIAS_SEMANA[inicio].slice(0, 3)
+    );
+    if (i < dias.length) {
+      inicio = dias[i];
+      fim = dias[i];
+    }
+  }
+  return partes.join(", ");
+}
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
@@ -62,11 +106,12 @@ export function RegrasHorarioManager({
     router.refresh();
   }
 
-  async function handleRemover(id: number) {
-    await fetch(`${API_URL}/regras-horario/${id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+  async function handleRemover(ids: number[]) {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`${API_URL}/regras-horario/${id}`, { method: "DELETE", credentials: "include" })
+      )
+    );
     router.refresh();
   }
 
@@ -85,18 +130,12 @@ export function RegrasHorarioManager({
           <label htmlFor="local" className="mb-1.5 text-sm font-semibold">
             Local
           </label>
-          <select
+          <Select
             id="local"
             value={localId}
-            onChange={(e) => setLocalId(e.target.value)}
-            className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-          >
-            {locais.map((local) => (
-              <option key={local.id} value={local.id}>
-                {local.nome}
-              </option>
-            ))}
-          </select>
+            onChange={setLocalId}
+            options={locais.map((local) => ({ value: String(local.id), label: local.nome }))}
+          />
         </div>
 
         <div className="flex w-full flex-col gap-2">
@@ -200,18 +239,18 @@ export function RegrasHorarioManager({
               <p className="text-[13.5px] text-muted">Nenhum horário cadastrado ainda.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {regrasDoLocal.map((regra) => (
+                {agruparPorHorario(regrasDoLocal).map((grupo) => (
                   <li
-                    key={regra.id}
+                    key={`${grupo.horaInicio}-${grupo.horaFim}`}
                     className="flex items-center justify-between rounded-xl bg-accent-soft px-4 py-2.5 text-[14px]"
                   >
                     <span className="font-semibold text-accent-dark">
-                      {DIAS_SEMANA[regra.dia_semana]} · {formatHoraCurta(regra.hora_inicio)} –{" "}
-                      {formatHoraCurta(regra.hora_fim)}
+                      {formatarDias(grupo.regras)} · {formatHoraCurta(grupo.horaInicio)} –{" "}
+                      {formatHoraCurta(grupo.horaFim)}
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleRemover(regra.id)}
+                      onClick={() => handleRemover(grupo.regras.map((r) => r.id))}
                       className="text-[13px] font-semibold text-red-600 hover:underline"
                     >
                       Remover
