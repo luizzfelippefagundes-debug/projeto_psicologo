@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
@@ -46,8 +47,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex antialiased" suppressHydrationWarning>
-        <PwaRegister />
-        {children}
+        <ClerkProvider>
+          <PwaRegister />
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );
