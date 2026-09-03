@@ -172,6 +172,37 @@ export function addDaysISO(dateISO: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+export function addMonthsISO(dateISO: string, months: number): string {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1 + months, d, 12));
+  return dt.toISOString().slice(0, 10);
+}
+
+// Grade de calendário do mês de referência: null nas células vazias antes do dia 1,
+// e uma data ISO por dia do mês, sem preencher os dias do mês seguinte no fim da grade.
+export function getMonthGrid(mesReferenciaISO: string): (string | null)[] {
+  const [y, m] = mesReferenciaISO.split("-").map(Number);
+  const primeiroDia = new Date(Date.UTC(y, m - 1, 1, 12));
+  const diaSemanaPrimeiro = primeiroDia.getUTCDay(); // 0 = domingo
+  const diasNoMes = new Date(Date.UTC(y, m, 0, 12)).getUTCDate();
+
+  const celulas: (string | null)[] = Array(diaSemanaPrimeiro).fill(null);
+  for (let dia = 1; dia <= diasNoMes; dia++) {
+    celulas.push(`${y}-${String(m).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
+  }
+  return celulas;
+}
+
+export function formatMesAno(mesReferenciaISO: string): string {
+  const dt = new Date(`${mesReferenciaISO}T12:00:00-03:00`);
+  const label = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  }).format(dt);
+  return label.replace(/^\w/, (c) => c.toUpperCase());
+}
+
 export function formatDiaSemanaCurto(dateISO: string): string {
   const dt = new Date(`${dateISO}T12:00:00-03:00`);
   const label = new Intl.DateTimeFormat("pt-BR", {

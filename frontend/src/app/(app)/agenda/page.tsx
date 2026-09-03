@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { AgendaList } from "@/components/AgendaList";
+import { AgendaDatePicker } from "@/components/AgendaDatePicker";
 import { getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
 import { addDaysISO, formatDiaMesCurto, formatDiaSemanaCurto, getTodayISO } from "@/lib/format";
 
@@ -42,7 +43,6 @@ export default async function AgendaPage({
 
   const diaAnterior = addDaysISO(diaISO, -1);
   const diaSeguinte = addDaysISO(diaISO, 1);
-  const ehHoje = diaISO === hojeISO;
 
   return (
     <div>
@@ -54,15 +54,7 @@ export default async function AgendaPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/agenda"
-            aria-disabled={ehHoje}
-            className={`rounded-xl border-[1.5px] border-accent px-3.5 py-2 text-[13px] font-extrabold text-accent-dark transition-opacity ${
-              ehHoje ? "pointer-events-none opacity-50" : ""
-            }`}
-          >
-            Hoje
-          </Link>
+          <AgendaDatePicker diaSelecionadoISO={diaISO} />
           <div className="flex overflow-hidden rounded-xl border border-border">
             <Link
               href={`/agenda?data=${diaAnterior}`}
