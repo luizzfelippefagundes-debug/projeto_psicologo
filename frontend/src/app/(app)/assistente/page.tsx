@@ -12,7 +12,7 @@ export default function AssistentePage() {
   const [aba, setAba] = useState<Aba>("Assistente IA");
 
   return (
-    <div className="pl-12 md:pl-0">
+    <div>
       <div className="mb-6 flex items-center justify-between gap-5">
         <div>
           <h1 className="text-2xl font-extrabold">Assistente</h1>

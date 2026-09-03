@@ -26,7 +26,7 @@ export default async function PacienteDetalhePage({
   }
 
   return (
-    <div className="pl-12 md:pl-0">
+    <div>
       <div className="mb-5 flex items-center justify-between gap-5">
         <Link href="/pacientes" className="text-[13.5px] font-semibold text-muted hover:text-fg">
           ← Voltar pra Pacientes

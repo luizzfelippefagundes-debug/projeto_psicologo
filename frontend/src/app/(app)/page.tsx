@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   const primeiroNome = profissional.nome.split(" ")[0];
 
   return (
-    <div className="pl-12 md:pl-0">
+    <div>
       <div className="mb-7 flex items-center justify-between gap-5">
         <div>
           <h1 className="text-2xl font-extrabold">Olá, {primeiroNome}</h1>

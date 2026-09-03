@@ -16,7 +16,7 @@ export default async function AgendaPage({
 
   if (locais.length === 0) {
     return (
-      <div className="pl-12 md:pl-0">
+      <div>
         <div className="mb-7 flex items-center justify-between gap-5">
           <div>
             <h1 className="text-2xl font-extrabold">Agenda</h1>
@@ -45,7 +45,7 @@ export default async function AgendaPage({
   const ehHoje = diaISO === hojeISO;
 
   return (
-    <div className="pl-12 md:pl-0">
+    <div>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold">Agenda</h1>
