@@ -2,13 +2,15 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { RegrasHorarioManager } from "@/components/RegrasHorarioManager";
 import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
-import { getGoogleStatus, getLocais, getRegrasHorario } from "@/lib/api";
+import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
+import { getGoogleStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
-  const [locais, regras, googleStatus] = await Promise.all([
+  const [locais, regras, googleStatus, profissional] = await Promise.all([
     getLocais(),
     getRegrasHorario(),
     getGoogleStatus(),
+    getMe(),
   ]);
 
   return (
@@ -38,6 +40,15 @@ export default async function ConfiguracoesPage() {
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Link de agendamento pro paciente</h2>
+        <p className="mb-4 text-[14px] text-muted">
+          Compartilhe esse link — o paciente cria conta e marca a própria consulta, mesmo se o bot do
+          WhatsApp estiver fora do ar.
+        </p>
+        <LinkAgendamentoCopiar slug={profissional.slug} />
       </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">

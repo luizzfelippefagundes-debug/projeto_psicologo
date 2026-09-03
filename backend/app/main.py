@@ -125,7 +125,7 @@ async def logout(response: Response):
 async def me(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, nome, email FROM profissionais WHERE id = $1", profissional_id
+            "SELECT id, nome, email, slug FROM profissionais WHERE id = $1", profissional_id
         )
     return dict(row)
 

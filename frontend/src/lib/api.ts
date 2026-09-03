@@ -64,6 +64,7 @@ export type Profissional = {
   id: number;
   nome: string;
   email: string;
+  slug: string;
 };
 
 export function getMe() {
