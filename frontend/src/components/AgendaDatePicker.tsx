@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import {
   addMonthsISO,
@@ -50,8 +50,9 @@ export function AgendaDatePicker({ diaSelecionadoISO }: { diaSelecionadoISO: str
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="rounded-xl border-[1.5px] border-accent px-3.5 py-2 text-[13px] font-extrabold text-accent-dark"
+        className="flex items-center gap-2 rounded-xl border-[1.5px] border-accent px-3.5 py-2 text-[13px] font-extrabold text-accent-dark"
       >
+        <Calendar className="h-4 w-4" strokeWidth={2.25} />
         {formatDiaSemanaCurto(diaSelecionadoISO)}, {formatDiaMesCurto(diaSelecionadoISO)}
       </button>
 

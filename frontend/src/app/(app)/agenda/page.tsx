@@ -1,9 +1,11 @@
+import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { AgendaList } from "@/components/AgendaList";
 import { AgendaDatePicker } from "@/components/AgendaDatePicker";
 import { getBloqueios, getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
-import { getTodayISO } from "@/lib/format";
+import { addDaysISO, getTodayISO } from "@/lib/format";
 
 export default async function AgendaPage({
   searchParams,
@@ -32,7 +34,11 @@ export default async function AgendaPage({
     );
   }
 
-  const diaISO = data ?? getTodayISO();
+  const hojeISO = getTodayISO();
+  const diaISO = data ?? hojeISO;
+  const diaAnterior = addDaysISO(diaISO, -1);
+  const diaSeguinte = addDaysISO(diaISO, 1);
+  const ehHoje = diaISO === hojeISO;
   const [sessoes, bloqueios, pacientes] = await Promise.all([
     getSessoesPeriodo(diaISO, diaISO),
     getBloqueios(diaISO, diaISO),
@@ -43,8 +49,31 @@ export default async function AgendaPage({
     <div>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold">Agenda</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/agenda?data=${diaAnterior}`}
+            aria-label="Dia anterior"
+            className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-border bg-card"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
+          </Link>
           <AgendaDatePicker diaSelecionadoISO={diaISO} />
+          <Link
+            href={`/agenda?data=${diaSeguinte}`}
+            aria-label="Próximo dia"
+            className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-border bg-card"
+          >
+            <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
+          </Link>
+          <Link
+            href="/agenda"
+            aria-disabled={ehHoje}
+            className={`ml-1 rounded-xl px-3.5 py-2 text-[13px] font-extrabold text-accent-dark transition-opacity ${
+              ehHoje ? "pointer-events-none opacity-50" : "hover:bg-accent-soft"
+            }`}
+          >
+            Hoje
+          </Link>
           <ThemeToggle />
         </div>
       </div>
