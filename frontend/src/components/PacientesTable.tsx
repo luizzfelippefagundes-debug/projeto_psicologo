@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Pencil, Search } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { Select } from "@/components/Select";
 import {
   formatDataHoraBrasilia,
   iniciais,
@@ -222,7 +223,7 @@ function PacientesCard({
 
   return (
     <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-      <div className="flex items-center justify-between gap-4 border-b border-border p-6">
+      <div className="flex flex-col gap-3 border-b border-border p-6 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-[16px] font-bold">Todos os pacientes</h2>
         <div className="flex items-center gap-2 rounded-xl border border-border bg-accent-soft px-3 py-2 text-[14px]">
           <Search className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
@@ -231,56 +232,35 @@ function PacientesCard({
             value={busca}
             onChange={(e) => onBuscaChange(e.target.value)}
             placeholder="Buscar paciente..."
-            className="bg-transparent outline-none placeholder:text-muted"
+            className="w-full bg-transparent outline-none placeholder:text-muted"
           />
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] border-collapse">
-        <thead>
-          <tr>
-            {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map((col) => (
-              <th
-                key={col}
-                className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
-              >
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filtrados.map((p) => (
-            <tr
-              key={p.id}
-              onClick={() => onSelecionar(p)}
-              className="cursor-pointer hover:bg-accent-soft/40"
-            >
-              <td className="border-b border-border px-6 py-4 text-[14.5px] last:border-0">
-                <div className="flex items-center gap-3 font-bold">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-extrabold text-accent-dark">
+      {filtrados.length === 0 ? (
+        <p className="px-6 py-8 text-center text-[14px] text-muted">Nenhum paciente encontrado.</p>
+      ) : (
+        <>
+          {/* Lista em cards no celular — tabela some espremida em telas pequenas */}
+          <ul className="flex flex-col md:hidden">
+            {filtrados.map((p) => (
+              <li key={p.id} className="border-b border-border last:border-0">
+                <button
+                  type="button"
+                  onClick={() => onSelecionar(p)}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left active:bg-accent-soft/40"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13.5px] font-extrabold text-accent-dark">
                     {iniciais(p.nome)}
                   </div>
-                  {p.nome}
-                </div>
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {p.telefone}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] capitalize">
-                {p.tipo_atendimento}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {labelProcedimento(p.tipo_procedimento)}
-              </td>
-              <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
-                {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
-              </td>
-              <td className="border-b border-border px-6 py-4">
-                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14.5px] font-bold">{p.nome}</div>
+                    <div className="truncate text-[12.5px] text-muted">
+                      {p.telefone} · {labelProcedimento(p.tipo_procedimento)}
+                    </div>
+                  </div>
                   <span
-                    className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
                       p.status === "ativo"
                         ? "bg-accent-soft text-accent-dark"
                         : "bg-black/5 text-muted"
@@ -295,24 +275,90 @@ function PacientesCard({
                       onEditar(p);
                     }}
                     aria-label="Editar paciente"
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
                   >
                     <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
                   </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {filtrados.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-[14px] text-muted">
-                Nenhum paciente encontrado.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* Tabela no desktop */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[760px] border-collapse">
+              <thead>
+                <tr>
+                  {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map(
+                    (col) => (
+                      <th
+                        key={col}
+                        className="border-b border-border px-6 py-3.5 text-left text-[12.5px] font-bold uppercase tracking-wide text-muted"
+                      >
+                        {col}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map((p) => (
+                  <tr
+                    key={p.id}
+                    onClick={() => onSelecionar(p)}
+                    className="cursor-pointer hover:bg-accent-soft/40"
+                  >
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] last:border-0">
+                      <div className="flex items-center gap-3 font-bold">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[14px] font-extrabold text-accent-dark">
+                          {iniciais(p.nome)}
+                        </div>
+                        {p.nome}
+                      </div>
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {p.telefone}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] capitalize">
+                      {p.tipo_atendimento}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {labelProcedimento(p.tipo_procedimento)}
+                    </td>
+                    <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
+                      {p.proxima_sessao ? formatDataHoraBrasilia(p.proxima_sessao) : "—"}
+                    </td>
+                    <td className="border-b border-border px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+                            p.status === "ativo"
+                              ? "bg-accent-soft text-accent-dark"
+                              : "bg-black/5 text-muted"
+                          }`}
+                        >
+                          {p.status === "ativo" ? "Ativo" : "Inativo"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditar(p);
+                          }}
+                          aria-label="Editar paciente"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                        >
+                          <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -353,6 +399,12 @@ export function PacientesTable({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErro(null);
+
+    if (!pacienteEditando && !form.tipoProcedimento) {
+      setErro("Selecione o tipo de procedimento.");
+      return;
+    }
+
     setSalvando(true);
 
     const payload: Record<string, unknown> = {
@@ -406,10 +458,10 @@ export function PacientesTable({
         </button>
       </div>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex gap-2 overflow-x-auto">
         <Link
           href="/pacientes?aba=pacientes"
-          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+          className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-[13.5px] font-bold ${
             abaAtiva === "pacientes"
               ? "bg-accent text-white"
               : "border border-border bg-card text-fg"
@@ -419,7 +471,7 @@ export function PacientesTable({
         </Link>
         <Link
           href="/pacientes?aba=contatos"
-          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+          className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-[13.5px] font-bold ${
             abaAtiva === "contatos"
               ? "bg-accent text-white"
               : "border border-border bg-card text-fg"
@@ -429,7 +481,7 @@ export function PacientesTable({
         </Link>
         <Link
           href="/pacientes?aba=anamneses"
-          className={`rounded-xl px-4 py-2 text-[13.5px] font-bold ${
+          className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-[13.5px] font-bold ${
             abaAtiva === "anamneses"
               ? "bg-accent text-white"
               : "border border-border bg-card text-fg"
@@ -525,22 +577,13 @@ export function PacientesTable({
             <label htmlFor="tipo-procedimento" className="mb-1.5 text-sm font-semibold">
               Tipo de procedimento
             </label>
-            <select
+            <Select
               id="tipo-procedimento"
-              required={!pacienteEditando}
               value={form.tipoProcedimento}
-              onChange={(e) => setForm({ ...form, tipoProcedimento: e.target.value })}
-              className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-            >
-              <option value="" disabled>
-                Selecione...
-              </option>
-              {PROCEDIMENTOS.map((proc) => (
-                <option key={proc.value} value={proc.value}>
-                  {proc.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setForm({ ...form, tipoProcedimento: value })}
+              placeholder="Selecione..."
+              options={PROCEDIMENTOS.map((proc) => ({ value: proc.value, label: proc.label }))}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -548,34 +591,32 @@ export function PacientesTable({
               <label htmlFor="tipo" className="mb-1.5 text-sm font-semibold">
                 Tipo de atendimento
               </label>
-              <select
+              <Select
                 id="tipo"
                 value={form.tipoAtendimento}
-                onChange={(e) =>
-                  setForm({ ...form, tipoAtendimento: e.target.value as "individual" | "casal" })
+                onChange={(value) =>
+                  setForm({ ...form, tipoAtendimento: value as "individual" | "casal" })
                 }
-                className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-              >
-                <option value="individual">Individual</option>
-                <option value="casal">Casal</option>
-              </select>
+                options={[
+                  { value: "individual", label: "Individual" },
+                  { value: "casal", label: "Casal" },
+                ]}
+              />
             </div>
             {pacienteEditando && (
               <div className="flex flex-col">
                 <label htmlFor="status" className="mb-1.5 text-sm font-semibold">
                   Status
                 </label>
-                <select
+                <Select
                   id="status"
                   value={form.status}
-                  onChange={(e) =>
-                    setForm({ ...form, status: e.target.value as "ativo" | "inativo" })
-                  }
-                  className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
-                >
-                  <option value="ativo">Ativo</option>
-                  <option value="inativo">Inativo</option>
-                </select>
+                  onChange={(value) => setForm({ ...form, status: value as "ativo" | "inativo" })}
+                  options={[
+                    { value: "ativo", label: "Ativo" },
+                    { value: "inativo", label: "Inativo" },
+                  ]}
+                />
               </div>
             )}
           </div>

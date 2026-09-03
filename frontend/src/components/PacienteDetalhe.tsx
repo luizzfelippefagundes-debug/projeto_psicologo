@@ -74,13 +74,13 @@ export function PacienteDetalhe({
         </div>
       </div>
 
-      <div className="mb-5 flex gap-2 border-b border-border">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-border">
         {ABAS.map((a) => (
           <button
             key={a}
             type="button"
             onClick={() => setAba(a)}
-            className={`-mb-px border-b-2 px-4 py-2.5 text-[14px] font-bold transition-colors ${
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-[14px] font-bold transition-colors ${
               aba === a
                 ? "border-accent text-accent-dark"
                 : "border-transparent text-muted hover:text-fg"
