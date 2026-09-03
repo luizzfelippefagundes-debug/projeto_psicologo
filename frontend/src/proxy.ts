@@ -1,3 +1,4 @@
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -6,9 +7,12 @@ const PUBLIC_PATHS = ["/login", "/signup"];
 // já está logado — diferente de /login e /signup, que não fazem sentido pra quem
 // já tem sessão. O formulário de anamnese é aberto pelo paciente, sem login, mas
 // a profissional também pode abrir o mesmo link estando logada (ex: pra conferir).
-const ALWAYS_PUBLIC_PATHS = ["/anamnese"];
+// /agendar tem autenticação própria (Clerk, do lado do paciente) tratada dentro da
+// própria página — não depende do cookie de sessão da profissional. /sign-in e
+// /sign-up são as páginas geradas pelo Clerk, usadas só pelo fluxo de agendamento.
+const ALWAYS_PUBLIC_PATHS = ["/anamnese", "/agendar", "/sign-in", "/sign-up"];
 
-export function proxy(request: NextRequest) {
+function proxyDaProfissional(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (ALWAYS_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
@@ -27,6 +31,14 @@ export function proxy(request: NextRequest) {
 
   return NextResponse.next();
 }
+
+// clerkMiddleware por fora garante que a sessão do Clerk (usada só em /agendar/*,
+// pelo paciente) fique disponível pra auth()/useAuth() nas páginas — sem exigir
+// login nenhum aqui no proxy em si. A lógica de auth da profissional (cookie
+// customizado) continua rodando por dentro, sem mudança de comportamento.
+export default clerkMiddleware(async (_auth, request) => {
+  return proxyDaProfissional(request);
+});
 
 export const config = {
   // /api/* fica de fora — é o proxy pro backend (next.config.ts), não uma página;
