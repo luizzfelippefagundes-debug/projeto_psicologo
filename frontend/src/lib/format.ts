@@ -40,7 +40,7 @@ export type SessaoHistorico = {
   data_hora: string;
   duracao_minutos: number;
   modalidade: "presencial" | "teleconsulta";
-  status: "confirmada" | "concluida" | "cancelada" | "reservado";
+  status: "confirmada" | "concluida" | "cancelada" | "reservado" | "nao_compareceu";
   observacoes: string | null;
   local_nome: string;
 };
@@ -72,12 +72,21 @@ export type SessaoPeriodo = {
   data_hora: string;
   duracao_minutos: number;
   modalidade: "presencial" | "teleconsulta";
-  status: "confirmada" | "concluida";
+  status: "confirmada" | "concluida" | "nao_compareceu";
   observacoes: string | null;
   paciente_id: number;
   paciente_nome: string;
   local_id: number;
   local_nome: string;
+};
+
+export type Bloqueio = {
+  id: number;
+  local_id: number | null;
+  data_inicio: string;
+  data_fim: string;
+  motivo: string | null;
+  google_event_id: string | null;
 };
 
 export function formatHoraBrasilia(isoDateTime: string) {

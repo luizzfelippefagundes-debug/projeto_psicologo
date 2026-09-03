@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type {
   AnamneseDetalhe,
   AnamneseListaItem,
+  Bloqueio,
   ContatoBot,
   ConversaEscalonada,
   DashboardAnalytics,
@@ -75,6 +76,10 @@ export function getLocais() {
 
 export function getSessoesPeriodo(inicio: string, fim: string) {
   return apiFetch<SessaoPeriodo[]>(`/sessoes?inicio=${inicio}&fim=${fim}`);
+}
+
+export function getBloqueios(inicio: string, fim: string) {
+  return apiFetch<Bloqueio[]>(`/bloqueios?inicio=${inicio}&fim=${fim}`);
 }
 
 export function getRegrasHorario() {

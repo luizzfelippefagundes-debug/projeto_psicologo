@@ -19,6 +19,7 @@ const STATUS_SESSAO_LABEL: Record<string, string> = {
   concluida: "Concluída",
   cancelada: "Cancelada",
   reservado: "Reservado (bot)",
+  nao_compareceu: "Não compareceu",
 };
 
 export function PacienteDetalhe({

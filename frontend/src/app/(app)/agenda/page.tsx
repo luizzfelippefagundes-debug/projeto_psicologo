@@ -2,7 +2,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { AgendaList } from "@/components/AgendaList";
 import { AgendaDatePicker } from "@/components/AgendaDatePicker";
-import { getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
+import { getBloqueios, getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
 import { getTodayISO } from "@/lib/format";
 
 export default async function AgendaPage({
@@ -33,8 +33,9 @@ export default async function AgendaPage({
   }
 
   const diaISO = data ?? getTodayISO();
-  const [sessoes, pacientes] = await Promise.all([
+  const [sessoes, bloqueios, pacientes] = await Promise.all([
     getSessoesPeriodo(diaISO, diaISO),
+    getBloqueios(diaISO, diaISO),
     getPacientes(),
   ]);
 
@@ -55,7 +56,13 @@ export default async function AgendaPage({
         </p>
       ) : null}
 
-      <AgendaList diaISO={diaISO} sessoes={sessoes} locais={locais} pacientes={pacientes} />
+      <AgendaList
+        diaISO={diaISO}
+        sessoes={sessoes}
+        bloqueios={bloqueios}
+        locais={locais}
+        pacientes={pacientes}
+      />
     </div>
   );
 }

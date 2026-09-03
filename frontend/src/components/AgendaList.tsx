@@ -2,11 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { Lock, LockOpen, Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import {
+  formatDiaMesCurto,
+  formatDiaSemanaCurto,
   formatHoraBrasilia,
+  type Bloqueio,
   type Local,
   type Paciente,
   type SessaoPeriodo,
@@ -72,34 +75,67 @@ function InfoRow({ label, valor }: { label: string; valor: string }) {
   );
 }
 
-// Pra cada horário do dia, diz se ele é o início de uma sessão, se cai dentro de uma
-// sessão que começou antes (continuação), ou se está livre.
-function posicaoDoSlot(sessoes: SessaoPeriodo[], horaLabel: string) {
+function partesBrasilia(iso: string): { dataISO: string; minutos: number } {
+  const dataISO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+    new Date(iso)
+  );
+  const [h, m] = formatHoraBrasilia(iso).split(":").map(Number);
+  return { dataISO, minutos: h * 60 + m };
+}
+
+type Posicao =
+  | { tipo: "sessao-inicio"; sessao: SessaoPeriodo }
+  | { tipo: "sessao-continuacao" }
+  | { tipo: "bloqueio-inicio"; bloqueio: Bloqueio }
+  | { tipo: "bloqueio-continuacao" }
+  | { tipo: "livre" };
+
+// Pra cada horário do dia, diz se ele é o início de uma sessão/bloqueio, se cai dentro
+// de um que começou antes (continuação), ou se está livre. Sessão tem prioridade sobre
+// bloqueio (não deveriam se sobrepor na prática, mas se sobrepuserem a sessão é o que
+// realmente importa mostrar).
+function posicaoDoSlot(
+  sessoes: SessaoPeriodo[],
+  bloqueios: Bloqueio[],
+  horaLabel: string,
+  diaISO: string
+): Posicao {
   const [hs, ms] = horaLabel.split(":").map(Number);
   const slotMinutos = hs * 60 + ms;
 
   for (const sessao of sessoes) {
-    const inicioLabel = formatHoraBrasilia(sessao.data_hora);
-    const [h, m] = inicioLabel.split(":").map(Number);
-    const inicioMinutos = h * 60 + m;
+    const { minutos: inicioMinutos } = partesBrasilia(sessao.data_hora);
     const fimMinutos = inicioMinutos + sessao.duracao_minutos;
-
-    if (slotMinutos === inicioMinutos) return { tipo: "inicio" as const, sessao };
+    if (slotMinutos === inicioMinutos) return { tipo: "sessao-inicio", sessao };
     if (slotMinutos > inicioMinutos && slotMinutos < fimMinutos) {
-      return { tipo: "continuacao" as const, sessao };
+      return { tipo: "sessao-continuacao" };
     }
   }
-  return { tipo: "livre" as const, sessao: null };
+
+  for (const bloqueio of bloqueios) {
+    const ini = partesBrasilia(bloqueio.data_inicio);
+    const fim = partesBrasilia(bloqueio.data_fim);
+    const inicioMinutos = ini.dataISO < diaISO ? 0 : ini.minutos;
+    const fimMinutos = fim.dataISO > diaISO ? 24 * 60 : fim.minutos;
+    if (slotMinutos === inicioMinutos) return { tipo: "bloqueio-inicio", bloqueio };
+    if (slotMinutos > inicioMinutos && slotMinutos < fimMinutos) {
+      return { tipo: "bloqueio-continuacao" };
+    }
+  }
+
+  return { tipo: "livre" };
 }
 
 export function AgendaList({
   diaISO,
   sessoes,
+  bloqueios,
   locais,
   pacientes,
 }: {
   diaISO: string;
   sessoes: SessaoPeriodo[];
+  bloqueios: Bloqueio[];
   locais: Local[];
   pacientes: Paciente[];
 }) {
@@ -118,6 +154,9 @@ export function AgendaList({
     mensagem: string;
     executar: (notificar: boolean) => Promise<void>;
   } | null>(null);
+  const [bloqueando, setBloqueando] = useState<{ hora: string } | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
+  const [duracaoBloqueio, setDuracaoBloqueio] = useState("60");
 
   function abrirCriacao(horaInicial?: string) {
     setSessaoEditando(null);
@@ -222,6 +261,66 @@ export function AgendaList({
     });
   }
 
+  function cancelarDireto(sessao: SessaoPeriodo, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSessaoEditando(sessao);
+    setPendente({
+      titulo: "Cancelar sessão",
+      mensagem: `Cancelar a sessão de ${sessao.paciente_nome}? Notificar o paciente por email?`,
+      executar: cancelarSessao,
+    });
+  }
+
+  async function marcarNaoCompareceu() {
+    if (!sessaoEditando) return;
+    setSalvando(true);
+    await fetch(`${API_URL}/sessoes/${sessaoEditando.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status: "nao_compareceu" }),
+    });
+    setSalvando(false);
+    setModalAberto(false);
+    router.refresh();
+  }
+
+  function abrirBloqueio(horaLabel: string) {
+    setBloqueando({ hora: horaLabel });
+    setMotivoBloqueio("");
+    setDuracaoBloqueio("60");
+  }
+
+  async function criarBloqueio(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!bloqueando) return;
+    setSalvando(true);
+
+    const inicio = new Date(`${diaISO}T${bloqueando.hora}:00-03:00`);
+    const fim = new Date(inicio.getTime() + Number(duracaoBloqueio) * 60_000);
+
+    await fetch(`${API_URL}/bloqueios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        data_inicio: inicio.toISOString(),
+        data_fim: fim.toISOString(),
+        motivo: motivoBloqueio || null,
+      }),
+    });
+
+    setSalvando(false);
+    setBloqueando(null);
+    router.refresh();
+  }
+
+  async function removerBloqueio(bloqueio: Bloqueio, e: React.MouseEvent) {
+    e.stopPropagation();
+    await fetch(`${API_URL}/bloqueios/${bloqueio.id}`, { method: "DELETE", credentials: "include" });
+    router.refresh();
+  }
+
   return (
     <>
       <div className="mb-4 flex items-center justify-between gap-4">
@@ -238,9 +337,9 @@ export function AgendaList({
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
         {SLOTS.map((horaLabel) => {
-          const pos = posicaoDoSlot(sessoes, horaLabel);
+          const pos = posicaoDoSlot(sessoes, bloqueios, horaLabel, diaISO);
 
-          if (pos.tipo === "continuacao") {
+          if (pos.tipo === "sessao-continuacao" || pos.tipo === "bloqueio-continuacao") {
             return (
               <div
                 key={horaLabel}
@@ -252,46 +351,104 @@ export function AgendaList({
             );
           }
 
-          if (pos.tipo === "inicio" && pos.sessao) {
+          if (pos.tipo === "sessao-inicio") {
             const sessao = pos.sessao;
+            const pillClasse =
+              sessao.status === "confirmada"
+                ? "bg-accent-soft text-accent-dark"
+                : sessao.status === "concluida"
+                  ? "bg-black/5 text-muted"
+                  : "bg-red-500/10 text-red-600";
+            const pillLabel =
+              sessao.status === "confirmada"
+                ? "Confirmada"
+                : sessao.status === "concluida"
+                  ? "Concluída"
+                  : "Não compareceu";
             return (
-              <button
+              <div
                 key={horaLabel}
-                type="button"
-                onClick={() => abrirPreview(sessao)}
-                className="flex w-full items-center gap-4 border-b border-border px-5 py-3.5 text-left transition-colors last:border-0 hover:bg-accent-soft/40"
+                className="flex w-full items-center gap-3 border-b border-border px-5 py-3.5 transition-colors last:border-0 hover:bg-accent-soft/40"
+              >
+                <button
+                  type="button"
+                  onClick={() => abrirPreview(sessao)}
+                  className="flex min-w-0 flex-1 items-center gap-4 text-left"
+                >
+                  <span className="w-12 shrink-0 text-[13px] font-bold text-muted">{horaLabel}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14.5px] font-bold">{sessao.paciente_nome}</div>
+                    <div className="truncate text-[12.5px] text-muted">
+                      {sessao.local_nome} ·{" "}
+                      {sessao.modalidade === "teleconsulta" ? "Teleconsulta" : "Presencial"}
+                    </div>
+                  </div>
+                </button>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold ${pillClasse}`}>
+                  {pillLabel}
+                </span>
+                {sessao.status === "confirmada" && (
+                  <button
+                    type="button"
+                    onClick={(e) => cancelarDireto(sessao, e)}
+                    aria-label="Cancelar sessão"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-red-500/10 hover:text-red-600"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          if (pos.tipo === "bloqueio-inicio") {
+            const bloqueio = pos.bloqueio;
+            return (
+              <div
+                key={horaLabel}
+                className="flex items-center gap-4 border-b border-border px-5 py-3.5 last:border-0"
               >
                 <span className="w-12 shrink-0 text-[13px] font-bold text-muted">{horaLabel}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14.5px] font-bold">{sessao.paciente_nome}</div>
-                  <div className="truncate text-[12.5px] text-muted">
-                    {sessao.local_nome} ·{" "}
-                    {sessao.modalidade === "teleconsulta" ? "Teleconsulta" : "Presencial"}
-                  </div>
+                <div className="min-w-0 flex-1 truncate text-[13.5px] text-muted">
+                  {bloqueio.motivo || "Horário bloqueado"}
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold ${
-                    sessao.status === "confirmada"
-                      ? "bg-accent-soft text-accent-dark"
-                      : "bg-black/5 text-muted"
-                  }`}
-                >
-                  {sessao.status === "confirmada" ? "Confirmada" : "Concluída"}
+                <span className="shrink-0 rounded-full bg-black/5 px-2.5 py-1 text-[11.5px] font-bold text-muted">
+                  Ocupado
                 </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={(e) => removerBloqueio(bloqueio, e)}
+                  aria-label="Desbloquear horário"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                >
+                  <Lock className="h-3.5 w-3.5" strokeWidth={2.25} />
+                </button>
+              </div>
             );
           }
 
           return (
-            <button
+            <div
               key={horaLabel}
-              type="button"
-              onClick={() => abrirCriacao(horaLabel)}
-              className="flex w-full items-center gap-4 border-b border-border px-5 py-3.5 text-left text-muted transition-colors last:border-0 hover:bg-accent-soft/40"
+              className="flex items-center gap-4 border-b border-border px-5 py-3.5 transition-colors last:border-0 hover:bg-accent-soft/40"
             >
-              <span className="w-12 shrink-0 text-[13px] font-bold">{horaLabel}</span>
-              <span className="flex-1 text-[13.5px]">Livre</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => abrirCriacao(horaLabel)}
+                className="flex min-w-0 flex-1 items-center gap-4 text-left text-muted"
+              >
+                <span className="w-12 shrink-0 text-[13px] font-bold">{horaLabel}</span>
+                <span className="flex-1 text-[13.5px]">Livre</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => abrirBloqueio(horaLabel)}
+                aria-label="Bloquear horário"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+              >
+                <LockOpen className="h-3.5 w-3.5" strokeWidth={2.25} />
+              </button>
+            </div>
           );
         })}
       </div>
@@ -445,17 +602,27 @@ export function AgendaList({
 
           {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
 
-          <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex items-center justify-between gap-4 pt-1">
             {sessaoEditando ? (
-              <button
-                type="button"
-                onClick={handleCancelarClick}
-                disabled={salvando}
-                className="flex items-center gap-1 text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
-              >
-                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                Cancelar sessão
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={marcarNaoCompareceu}
+                  disabled={salvando}
+                  className="text-[13.5px] font-semibold text-muted hover:underline disabled:opacity-60"
+                >
+                  Não compareceu
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelarClick}
+                  disabled={salvando}
+                  className="flex items-center gap-1 text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  Cancelar sessão
+                </button>
+              </div>
             ) : (
               <span />
             )}
@@ -468,6 +635,54 @@ export function AgendaList({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!bloqueando} onClose={() => setBloqueando(null)} title="Bloquear horário">
+        {bloqueando && (
+          <form onSubmit={criarBloqueio} className="flex flex-col gap-4">
+            <p className="text-[13.5px] text-muted">
+              {formatDiaSemanaCurto(diaISO)}, {formatDiaMesCurto(diaISO)} às {bloqueando.hora}
+            </p>
+            <div className="flex flex-col">
+              <label htmlFor="duracao-bloqueio" className="mb-1.5 text-sm font-semibold">
+                Duração (min)
+              </label>
+              <input
+                id="duracao-bloqueio"
+                type="number"
+                min={10}
+                step={5}
+                required
+                value={duracaoBloqueio}
+                onChange={(e) => setDuracaoBloqueio(e.target.value)}
+                className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label htmlFor="motivo-bloqueio" className="mb-1.5 text-sm font-semibold">
+                Motivo (opcional)
+              </label>
+              <input
+                id="motivo-bloqueio"
+                type="text"
+                value={motivoBloqueio}
+                onChange={(e) => setMotivoBloqueio(e.target.value)}
+                placeholder="Ex: compromisso pessoal"
+                className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+              />
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                disabled={salvando}
+                className="flex items-center gap-1.5 rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
+              >
+                <Lock className="h-3.5 w-3.5" strokeWidth={2.25} />
+                {salvando ? "Bloqueando..." : "Bloquear horário"}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <Modal open={!!pendente} onClose={() => setPendente(null)} title={pendente?.titulo ?? ""}>
