@@ -109,6 +109,19 @@ async def horarios_disponiveis(
             for row in ocupados
         ]
 
+        # Bloqueios (compromisso pessoal do Google Calendar, ou bloqueado manualmente na
+        # agenda) também contam como indisponibilidade — sem isso, o bot podia oferecer um
+        # horário que a profissional já tem ocupado fora do sistema.
+        bloqueios = await conn.fetch(
+            """
+            SELECT data_inicio, data_fim FROM bloqueios_horario
+            WHERE profissional_id = $1 AND (local_id IS NULL OR local_id = $2)
+              AND data_inicio::date <= $3 AND data_fim::date >= $3
+            """,
+            profissional_id, local["id"], data,
+        )
+        janelas_ocupadas += [(row["data_inicio"], row["data_fim"]) for row in bloqueios]
+
     livres: list[str] = []
     passo = timedelta(minutes=30)
     duracao = timedelta(minutes=duracao_minutos)

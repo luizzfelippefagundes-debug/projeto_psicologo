@@ -529,6 +529,72 @@ async def listar_dias_com_sessao(
     return [row["dia"].isoformat() for row in rows]
 
 
+@app.get("/bloqueios")
+async def listar_bloqueios(
+    inicio: date,
+    fim: date,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, local_id, data_inicio, data_fim, motivo, google_event_id
+            FROM bloqueios_horario
+            WHERE profissional_id = $1
+              AND data_inicio::date <= $3 AND data_fim::date >= $2
+            ORDER BY data_inicio
+            """,
+            profissional_id, inicio, fim,
+        )
+    return [dict(row) for row in rows]
+
+
+class BloqueioBody(BaseModel):
+    data_inicio: datetime
+    data_fim: datetime
+    motivo: str | None = None
+    local_id: int | None = None
+
+
+@app.post("/bloqueios", status_code=status.HTTP_201_CREATED)
+async def criar_bloqueio(
+    body: BloqueioBody, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    if body.data_inicio >= body.data_fim:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="data_inicio deve ser antes de data_fim")
+
+    async with db.pool.acquire() as conn:
+        if body.local_id is not None:
+            local = await conn.fetchval(
+                "SELECT id FROM locais WHERE id = $1 AND profissional_id = $2", body.local_id, profissional_id
+            )
+            if local is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local não encontrado")
+
+        row = await conn.fetchrow(
+            """
+            INSERT INTO bloqueios_horario (profissional_id, local_id, data_inicio, data_fim, motivo)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, local_id, data_inicio, data_fim, motivo, google_event_id
+            """,
+            profissional_id, body.local_id, body.data_inicio, body.data_fim, body.motivo,
+        )
+    return dict(row)
+
+
+@app.delete("/bloqueios/{bloqueio_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_bloqueio(
+    bloqueio_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "DELETE FROM bloqueios_horario WHERE id = $1 AND profissional_id = $2",
+            bloqueio_id, profissional_id,
+        )
+    if resultado == "DELETE 0":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bloqueio não encontrado")
+
+
 class SessaoBody(BaseModel):
     paciente_id: int
     local_id: int
@@ -650,7 +716,9 @@ async def editar_sessao(
 ):
     if body.modalidade is not None and body.modalidade not in ("presencial", "teleconsulta"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="modalidade inválida")
-    if body.status is not None and body.status not in ("confirmada", "cancelada", "concluida"):
+    if body.status is not None and body.status not in (
+        "confirmada", "cancelada", "concluida", "nao_compareceu",
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status inválido")
 
     async with db.pool.acquire() as conn:
