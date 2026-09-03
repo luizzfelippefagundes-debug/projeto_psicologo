@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     resend_from_email: str = "Consultório <onboarding@resend.dev>"
     google_client_id: str | None = None
     google_client_secret: str | None = None
+    clerk_issuer: str | None = None  # ex: https://exemplo-123.clerk.accounts.dev
     google_redirect_uri: str = "http://localhost:8000/google/callback"
     evolution_api_url: str = "http://evolution-api:8080"
     evolution_api_key: str | None = None
