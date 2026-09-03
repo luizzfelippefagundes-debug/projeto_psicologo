@@ -1,6 +1,6 @@
 "use client";
 
-import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { Show, useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { cancelarSessaoPublica, getMinhasSessoes, type SessaoPublica } from "@/lib/apiPublico";
 
@@ -53,11 +53,10 @@ export function MinhasSessoesPublico({ slug }: { slug: string }) {
       <div className="w-full max-w-[480px]">
         <h1 className="mb-6 text-2xl font-extrabold">Minhas consultas</h1>
 
-        <SignedOut>
-          <p className="text-[14.5px] text-muted">Faça login pra ver suas consultas.</p>
-        </SignedOut>
-
-        <SignedIn>
+        <Show
+          when="signed-in"
+          fallback={<p className="text-[14.5px] text-muted">Faça login pra ver suas consultas.</p>}
+        >
           {!carregado ? null : sessoes.length === 0 ? (
             <p className="text-[14.5px] text-muted">Nenhuma consulta ainda.</p>
           ) : (
@@ -88,7 +87,7 @@ export function MinhasSessoesPublico({ slug }: { slug: string }) {
               ))}
             </ul>
           )}
-        </SignedIn>
+        </Show>
       </div>
     </div>
   );

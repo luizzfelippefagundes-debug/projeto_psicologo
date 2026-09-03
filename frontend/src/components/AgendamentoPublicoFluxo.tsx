@@ -1,6 +1,6 @@
 "use client";
 
-import { SignedIn, SignedOut, SignIn, useAuth, useUser } from "@clerk/nextjs";
+import { Show, SignIn, useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { agendarPublico, getHorariosPublico, type ProfissionalPublico } from "@/lib/apiPublico";
 import { Select } from "@/components/Select";
@@ -92,11 +92,7 @@ export function AgendamentoPublicoFluxo({
         <h1 className="mb-1 text-2xl font-extrabold">{profissional.nome}</h1>
         <p className="mb-6 text-[14.5px] text-muted">Agende sua consulta</p>
 
-        <SignedOut>
-          <SignIn routing="hash" />
-        </SignedOut>
-
-        <SignedIn>
+        <Show when="signed-in" fallback={<SignIn routing="hash" />}>
           {confirmado ? (
             <p className="text-[15px] font-semibold text-accent-dark">
               Consulta agendada! Você pode ver em &quot;Minhas consultas&quot;.
@@ -188,7 +184,7 @@ export function AgendamentoPublicoFluxo({
               )}
             </div>
           )}
-        </SignedIn>
+        </Show>
       </div>
     </div>
   );
