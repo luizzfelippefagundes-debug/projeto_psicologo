@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Brain } from "lucide-react";
+import { Brain, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { signup } from "@/lib/auth-client";
 
@@ -11,6 +11,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -80,6 +81,7 @@ export default function SignupPage() {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required
               placeholder="seuemail@exemplo.com"
               className="w-full rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-4 py-3 text-[15px] outline-none focus:border-accent"
@@ -90,15 +92,30 @@ export default function SignupPage() {
             <label htmlFor="senha" className="mb-1.5 text-sm font-semibold">
               Senha
             </label>
-            <input
-              id="senha"
-              name="senha"
-              type="password"
-              required
-              minLength={6}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-4 py-3 text-[15px] outline-none focus:border-accent"
-            />
+            <div className="relative">
+              <input
+                id="senha"
+                name="senha"
+                type={mostrarSenha ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={6}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-4 py-3 pr-11 text-[15px] outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha((v) => !v)}
+                aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted hover:text-fg"
+              >
+                {mostrarSenha ? (
+                  <EyeOff className="h-[18px] w-[18px]" strokeWidth={2} />
+                ) : (
+                  <Eye className="h-[18px] w-[18px]" strokeWidth={2} />
+                )}
+              </button>
+            </div>
           </div>
 
           <button
