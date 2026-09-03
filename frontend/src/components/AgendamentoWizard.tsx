@@ -157,10 +157,10 @@ export function AgendamentoWizard({
           <p className="text-[15px] font-semibold text-accent-dark">Consulta agendada!</p>
           <button
             type="button"
-            onClick={() => router.push(`/agendar/${slug}/minhas-sessoes`)}
+            onClick={() => router.push(`/agendar/${slug}/perfil`)}
             className="mt-4 rounded-xl bg-accent px-5 py-2.5 text-[14px] font-bold text-white"
           >
-            Ver minhas consultas
+            Ver meu perfil
           </button>
         </div>
       ) : (

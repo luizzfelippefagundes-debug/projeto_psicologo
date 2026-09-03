@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AlertaCrise } from "@/components/AlertaCrise";
 import { DashboardCharts } from "@/components/DashboardCharts";
+import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
 import {
   getConversasEscalonadas,
   getDashboardAnalytics,
@@ -33,6 +34,14 @@ export default async function DashboardPage() {
       </div>
 
       <AlertaCrise conversas={conversasEscalonadas} />
+
+      <div className="mb-7 rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-1 text-[15px] font-bold">Link de agendamento pro paciente</h2>
+        <p className="mb-3 text-[13.5px] text-muted">
+          Compartilhe pra o paciente marcar a própria consulta, mesmo com o bot do WhatsApp fora do ar.
+        </p>
+        <LinkAgendamentoCopiar slug={profissional.slug} />
+      </div>
 
       <div className="mb-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]">

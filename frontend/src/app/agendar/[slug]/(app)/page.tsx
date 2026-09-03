@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, ChevronRight, ListChecks } from "lucide-react";
+import { CalendarClock, ChevronRight, User } from "lucide-react";
 import { getProfissionalPublicoServer } from "@/lib/apiPublicoServer";
 
 export default async function AgendarHomePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -25,13 +25,13 @@ export default async function AgendarHomePage({ params }: { params: Promise<{ sl
       </Link>
 
       <Link
-        href={`/agendar/${slug}/minhas-sessoes`}
+        href={`/agendar/${slug}/perfil`}
         className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-[0_4px_14px_var(--color-shadow)] transition-colors hover:bg-accent-soft"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-accent text-accent-dark">
-          <ListChecks className="h-5 w-5" strokeWidth={2} />
+          <User className="h-5 w-5" strokeWidth={2} />
         </span>
-        <span className="flex-1 text-[15px] font-bold">Minhas consultas</span>
+        <span className="flex-1 text-[15px] font-bold">Meu perfil</span>
         <ChevronRight className="h-5 w-5 shrink-0 text-muted" strokeWidth={2} />
       </Link>
     </div>

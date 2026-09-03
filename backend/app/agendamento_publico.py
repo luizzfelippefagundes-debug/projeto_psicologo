@@ -144,6 +144,23 @@ async def agendar_publico(body: AgendarBody, clerk_user_id: str = Depends(get_cu
     return {"sessao_id": sessao["id"], "data_hora": sessao["data_hora"].isoformat()}
 
 
+@router.get("/meu-perfil")
+async def meu_perfil(slug: str, clerk_user_id: str = Depends(get_current_clerk_user_id)):
+    async with db.pool.acquire() as conn:
+        profissional = await _buscar_profissional_por_slug(conn, slug)
+        paciente = await conn.fetchrow(
+            "SELECT nome, telefone, email FROM pacientes WHERE profissional_id = $1 AND clerk_user_id = $2",
+            profissional["id"], clerk_user_id,
+        )
+    # Sem paciente vinculado ainda é um estado válido — logou via Clerk mas nunca
+    # completou um agendamento (dados de contato entram nesse primeiro agendamento,
+    # não no login). Devolve nulo em vez de 404 pra não exigir tratamento de erro à
+    # toa no front.
+    if paciente is None:
+        return {"nome": None, "telefone": None, "email": None}
+    return dict(paciente)
+
+
 @router.get("/minhas-sessoes")
 async def minhas_sessoes(slug: str, clerk_user_id: str = Depends(get_current_clerk_user_id)):
     async with db.pool.acquire() as conn:

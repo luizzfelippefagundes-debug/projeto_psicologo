@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, Home, ListChecks, LogOut } from "lucide-react";
+import { CalendarClock, Home, LogOut, User } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { iniciais } from "@/lib/format";
@@ -22,7 +22,7 @@ export function AgendarShell({
   const NAV_ITEMS = [
     { href: base, label: "Início", Icon: Home, exact: true },
     { href: `${base}/novo`, label: "Agendar", Icon: CalendarClock, exact: false },
-    { href: `${base}/minhas-sessoes`, label: "Consultas", Icon: ListChecks, exact: false },
+    { href: `${base}/perfil`, label: "Perfil", Icon: User, exact: false },
   ];
 
   return (

@@ -14,6 +14,12 @@ export type SessaoPublica = {
   local_nome: string;
 };
 
+export type PerfilPublico = {
+  nome: string | null;
+  telefone: string | null;
+  email: string | null;
+};
+
 async function fetchPublico<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -53,6 +59,10 @@ export function agendarPublico(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export function getMeuPerfil(slug: string, token: string): Promise<PerfilPublico> {
+  return fetchPublico(`/publico/meu-perfil?slug=${slug}`, token);
 }
 
 export function getMinhasSessoes(slug: string, token: string): Promise<SessaoPublica[]> {
