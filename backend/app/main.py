@@ -505,6 +505,30 @@ async def listar_sessoes_periodo(
     return [dict(row) for row in rows]
 
 
+@app.get("/sessoes/dias")
+async def listar_dias_com_sessao(
+    inicio: date,
+    fim: date,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    """Datas (sem hora) que têm pelo menos uma sessão não-cancelada nesse período —
+    usado pra marcar no calendário quais dias têm agenda, sem precisar trazer os
+    detalhes de cada sessão."""
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT s.data_hora::date AS dia
+            FROM sessoes s
+            WHERE s.profissional_id = $1
+              AND s.data_hora::date BETWEEN $2::date AND $3::date
+              AND s.status NOT IN ('cancelada', 'reservado')
+            ORDER BY dia
+            """,
+            profissional_id, inicio, fim,
+        )
+    return [row["dia"].isoformat() for row in rows]
+
+
 class SessaoBody(BaseModel):
     paciente_id: int
     local_id: int
