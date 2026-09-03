@@ -165,28 +165,11 @@ export function getTodayISO(): string {
   return brazilParts(new Date()).dateISO;
 }
 
-export function getAgoraBrasilia(): { hour: number; minute: number } {
-  const { hour, minute } = brazilParts(new Date());
-  return { hour, minute };
-}
-
 export function addDaysISO(dateISO: string, days: number): string {
   const [y, m, d] = dateISO.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().slice(0, 10);
-}
-
-export function getWeekStart(referenceISODate?: string): string {
-  const ref = referenceISODate
-    ? new Date(`${referenceISODate}T12:00:00-03:00`)
-    : new Date();
-  const { dateISO, weekdayIndex } = brazilParts(ref);
-  return addDaysISO(dateISO, -weekdayIndex);
-}
-
-export function getWeekDates(mondayISO: string): string[] {
-  return Array.from({ length: 5 }, (_, i) => addDaysISO(mondayISO, i));
 }
 
 export function formatDiaSemanaCurto(dateISO: string): string {
@@ -237,11 +220,3 @@ export type AnamneseDetalhe = {
   enviado_em: string;
   respondido_em: string | null;
 } | null;
-
-export function sessaoGridPosition(isoDateTime: string, duracaoMinutos: number) {
-  const { dateISO, hour, minute, weekdayIndex } = brazilParts(new Date(isoDateTime));
-  const gridStartHour = 7;
-  const slot = (hour - gridStartHour) * 2 + (minute >= 30 ? 1 : 0);
-  const span = Math.max(1, Math.round(duracaoMinutos / 30));
-  return { dateISO, dayIndex: weekdayIndex, rowStart: slot + 1, rowSpan: span };
-}

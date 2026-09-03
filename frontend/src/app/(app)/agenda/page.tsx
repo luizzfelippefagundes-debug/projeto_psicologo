@@ -1,16 +1,17 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
-import { AgendaGrid } from "@/components/AgendaGrid";
+import { AgendaList } from "@/components/AgendaList";
 import { getLocais, getPacientes, getSessoesPeriodo } from "@/lib/api";
-import { addDaysISO, formatDiaMesCurto, getTodayISO, getWeekDates, getWeekStart } from "@/lib/format";
+import { addDaysISO, formatDiaMesCurto, formatDiaSemanaCurto, getTodayISO } from "@/lib/format";
 
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ semana?: string }>;
+  searchParams: Promise<{ data?: string }>;
 }) {
-  const { semana } = await searchParams;
+  const { data } = await searchParams;
   const locais = await getLocais();
 
   if (locais.length === 0) {
@@ -32,17 +33,16 @@ export default async function AgendaPage({
     );
   }
 
-  const mondayISO = getWeekStart(semana);
-  const weekDates = getWeekDates(mondayISO);
+  const hojeISO = getTodayISO();
+  const diaISO = data ?? hojeISO;
   const [sessoes, pacientes] = await Promise.all([
-    getSessoesPeriodo(weekDates[0], weekDates[4]),
+    getSessoesPeriodo(diaISO, diaISO),
     getPacientes(),
   ]);
-  const hojeISO = getTodayISO();
 
-  const semanaAnterior = addDaysISO(mondayISO, -7);
-  const proximaSemana = addDaysISO(mondayISO, 7);
-  const emSemanaAtual = mondayISO === getWeekStart();
+  const diaAnterior = addDaysISO(diaISO, -1);
+  const diaSeguinte = addDaysISO(diaISO, 1);
+  const ehHoje = diaISO === hojeISO;
 
   return (
     <div className="pl-12 md:pl-0">
@@ -50,33 +50,33 @@ export default async function AgendaPage({
         <div>
           <h1 className="text-2xl font-extrabold">Agenda</h1>
           <p className="mt-1 text-[14.5px] text-muted">
-            {formatDiaMesCurto(weekDates[0])} – {formatDiaMesCurto(weekDates[4])}
+            {formatDiaSemanaCurto(diaISO)}, {formatDiaMesCurto(diaISO)}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Link
             href="/agenda"
-            aria-disabled={emSemanaAtual}
+            aria-disabled={ehHoje}
             className={`rounded-xl border-[1.5px] border-accent px-3.5 py-2 text-[13px] font-extrabold text-accent-dark transition-opacity ${
-              emSemanaAtual ? "pointer-events-none opacity-50" : ""
+              ehHoje ? "pointer-events-none opacity-50" : ""
             }`}
           >
             Hoje
           </Link>
           <div className="flex overflow-hidden rounded-xl border border-border">
             <Link
-              href={`/agenda?semana=${semanaAnterior}`}
-              aria-label="Semana anterior"
-              className="border-r border-border bg-card px-3 py-2 text-[16px] font-extrabold leading-none"
+              href={`/agenda?data=${diaAnterior}`}
+              aria-label="Dia anterior"
+              className="flex items-center border-r border-border bg-card px-3 py-2"
             >
-              ‹
+              <ChevronLeft className="h-4 w-4" strokeWidth={2.5} />
             </Link>
             <Link
-              href={`/agenda?semana=${proximaSemana}`}
-              aria-label="Próxima semana"
-              className="bg-card px-3 py-2 text-[16px] font-extrabold leading-none"
+              href={`/agenda?data=${diaSeguinte}`}
+              aria-label="Próximo dia"
+              className="flex items-center bg-card px-3 py-2"
             >
-              ›
+              <ChevronRight className="h-4 w-4" strokeWidth={2.5} />
             </Link>
           </div>
           <ThemeToggle />
@@ -90,13 +90,7 @@ export default async function AgendaPage({
         </p>
       ) : null}
 
-      <AgendaGrid
-        weekDates={weekDates}
-        sessoes={sessoes}
-        locais={locais}
-        pacientes={pacientes}
-        hojeISO={hojeISO}
-      />
+      <AgendaList diaISO={diaISO} sessoes={sessoes} locais={locais} pacientes={pacientes} />
     </div>
   );
 }

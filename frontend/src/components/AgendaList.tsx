@@ -1,12 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import {
   formatHoraBrasilia,
-  getAgoraBrasilia,
-  sessaoGridPosition,
   type Local,
   type Paciente,
   type SessaoPeriodo,
@@ -14,11 +13,12 @@ import {
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 const HORAS = Array.from({ length: 14 }, (_, i) => 7 + i); // 07:00 .. 20:00
-const ALTURA_LINHA_PX = 44;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+
+const SLOTS = HORAS.flatMap((hora) => [0, 30].map((minuto) => `${pad2(hora)}:${pad2(minuto)}`));
 
 type FormState = {
   pacienteId: string;
@@ -71,18 +71,36 @@ function InfoRow({ label, valor }: { label: string; valor: string }) {
   );
 }
 
-export function AgendaGrid({
-  weekDates,
+// Pra cada horário do dia, diz se ele é o início de uma sessão, se cai dentro de uma
+// sessão que começou antes (continuação), ou se está livre.
+function posicaoDoSlot(sessoes: SessaoPeriodo[], horaLabel: string) {
+  const [hs, ms] = horaLabel.split(":").map(Number);
+  const slotMinutos = hs * 60 + ms;
+
+  for (const sessao of sessoes) {
+    const inicioLabel = formatHoraBrasilia(sessao.data_hora);
+    const [h, m] = inicioLabel.split(":").map(Number);
+    const inicioMinutos = h * 60 + m;
+    const fimMinutos = inicioMinutos + sessao.duracao_minutos;
+
+    if (slotMinutos === inicioMinutos) return { tipo: "inicio" as const, sessao };
+    if (slotMinutos > inicioMinutos && slotMinutos < fimMinutos) {
+      return { tipo: "continuacao" as const, sessao };
+    }
+  }
+  return { tipo: "livre" as const, sessao: null };
+}
+
+export function AgendaList({
+  diaISO,
   sessoes,
   locais,
   pacientes,
-  hojeISO,
 }: {
-  weekDates: string[];
+  diaISO: string;
   sessoes: SessaoPeriodo[];
   locais: Local[];
   pacientes: Paciente[];
-  hojeISO: string;
 }) {
   const router = useRouter();
   const [modalAberto, setModalAberto] = useState(false);
@@ -90,41 +108,19 @@ export function AgendaGrid({
   const [sessaoVisualizando, setSessaoVisualizando] = useState<SessaoPeriodo | null>(null);
   const [sessaoEditando, setSessaoEditando] = useState<SessaoPeriodo | null>(null);
   const [form, setForm] = useState<FormState>(
-    formStateVazio(weekDates[0], String(locais[0]?.id ?? ""), "09:00")
+    formStateVazio(diaISO, String(locais[0]?.id ?? ""), "09:00")
   );
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [arrastando, setArrastando] = useState<number | null>(null);
-  const [erroArrastar, setErroArrastar] = useState<string | null>(null);
   const [pendente, setPendente] = useState<{
     titulo: string;
     mensagem: string;
     executar: (notificar: boolean) => Promise<void>;
   } | null>(null);
 
-  const [, forcarAtualizacao] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => forcarAtualizacao((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const diaIndexHoje = weekDates.indexOf(hojeISO);
-  let linhaAgora: { gridColumn: number; gridRow: string; percentNoSlot: number } | null = null;
-  if (diaIndexHoje !== -1) {
-    const { hour, minute } = getAgoraBrasilia();
-    const totalMeiaHoras = (hour - HORAS[0]) * 2 + (minute >= 30 ? 1 : 0);
-    if (totalMeiaHoras >= 0 && totalMeiaHoras < HORAS.length * 2) {
-      linhaAgora = {
-        gridColumn: diaIndexHoje + 2,
-        gridRow: `${totalMeiaHoras + 1} / span 1`,
-        percentNoSlot: ((minute % 30) / 30) * 100,
-      };
-    }
-  }
-
-  function abrirCriacao(dataInicial?: string, horaInicial?: string) {
+  function abrirCriacao(horaInicial?: string) {
     setSessaoEditando(null);
-    setForm(formStateVazio(dataInicial ?? hojeISO, String(locais[0]?.id ?? ""), horaInicial ?? "09:00"));
+    setForm(formStateVazio(diaISO, String(locais[0]?.id ?? ""), horaInicial ?? "09:00"));
     setErro(null);
     setModalAberto(true);
   }
@@ -220,171 +216,78 @@ export function AgendaGrid({
     });
   }
 
-  async function reagendarPorArrastar(sessaoId: number, novaDataHoraISO: string, notificar: boolean) {
-    setErroArrastar(null);
-    const res = await fetch(`${API_URL}/sessoes/${sessaoId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ data_hora: novaDataHoraISO, notificar }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setErroArrastar(data.detail ?? "Não deu pra mover a sessão pra esse horário.");
-      return;
-    }
-
-    router.refresh();
-  }
-
-  function handleDrop(e: React.DragEvent, dateISO: string, hora: string) {
-    e.preventDefault();
-    const sessaoId = Number(e.dataTransfer.getData("text/plain"));
-    setArrastando(null);
-    if (!sessaoId) return;
-
-    const sessao = sessoes.find((s) => s.id === sessaoId);
-    if (!sessao) return;
-
-    const novaDataHoraISO = `${dateISO}T${hora}:00-03:00`;
-    setPendente({
-      titulo: "Mover sessão",
-      mensagem: `Mover a sessão de ${sessao.paciente_nome} para ${new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        timeZone: "America/Sao_Paulo",
-      }).format(new Date(novaDataHoraISO))} às ${hora}. Notificar o paciente por email?`,
-      executar: (notificar) => reagendarPorArrastar(sessaoId, novaDataHoraISO, notificar),
-    });
-  }
-
   return (
     <>
       <div className="mb-4 flex items-center justify-between gap-4">
-        {erroArrastar ? (
-          <p className="text-[13px] font-semibold text-red-600">{erroArrastar}</p>
-        ) : (
-          <p className="text-[13px] text-muted">Arraste uma sessão pra outro horário pra reagendar</p>
-        )}
+        <p className="text-[13px] text-muted">Toque num horário livre pra criar uma sessão</p>
         <button
           type="button"
           onClick={() => abrirCriacao()}
-          className="shrink-0 rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-dark"
         >
-          + Nova sessão
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Nova sessão
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-        <div className="grid min-w-[600px] grid-cols-[64px_repeat(5,1fr)] border-b border-border">
-          <div />
-          {weekDates.map((dateISO) => {
-            const isHoje = dateISO === hojeISO;
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
+        {SLOTS.map((horaLabel) => {
+          const pos = posicaoDoSlot(sessoes, horaLabel);
+
+          if (pos.tipo === "continuacao") {
             return (
-              <div key={dateISO} className="border-l border-border px-2 py-3 text-center">
-                <div
-                  className={`text-[12px] font-bold uppercase tracking-wide ${isHoje ? "text-accent" : "text-muted"}`}
-                >
-                  {new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" })
-                    .format(new Date(`${dateISO}T12:00:00-03:00`))
-                    .replace(".", "")}
-                </div>
-                <div
-                  className={`text-[16px] font-extrabold ${
-                    isHoje
-                      ? "mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white"
-                      : ""
-                  }`}
-                >
-                  {dateISO.slice(8, 10)}
-                </div>
+              <div
+                key={horaLabel}
+                className="flex items-center gap-2 border-b border-border px-5 py-2 text-[12px] text-muted last:border-0"
+              >
+                <span className="w-12 shrink-0 font-semibold">{horaLabel}</span>
+                <span>↳ continuação do horário anterior</span>
               </div>
             );
-          })}
-        </div>
+          }
 
-        <div
-          className="relative grid min-w-[600px] grid-cols-[64px_repeat(5,1fr)]"
-          style={{ gridTemplateRows: `repeat(${HORAS.length * 2}, ${ALTURA_LINHA_PX}px)` }}
-        >
-          {HORAS.map((hora, i) => (
-            <div
-              key={hora}
-              className="border-t border-border pr-2 text-right text-[13px] font-semibold text-muted"
-              style={{ gridColumn: 1, gridRow: `${i * 2 + 1} / span 2` }}
-            >
-              {String(hora).padStart(2, "0")}:00
-            </div>
-          ))}
-
-          {weekDates.map((dateISO, dayIndex) =>
-            HORAS.flatMap((hora, i) =>
-              [0, 30].map((minuto, meia) => {
-                const horaLabel = `${pad2(hora)}:${pad2(minuto)}`;
-                return (
-                  <button
-                    key={`${dateISO}-${horaLabel}`}
-                    type="button"
-                    onClick={() => abrirCriacao(dateISO, horaLabel)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleDrop(e, dateISO, horaLabel)}
-                    className="border-l border-border hover:bg-accent-soft/40"
-                    style={{ gridColumn: dayIndex + 2, gridRow: `${i * 2 + meia + 1} / span 1` }}
-                    aria-label={`Nova sessão em ${dateISO} às ${horaLabel}`}
-                  />
-                );
-              })
-            )
-          )}
-
-          {sessoes.map((sessao) => {
-            const pos = sessaoGridPosition(sessao.data_hora, sessao.duracao_minutos);
-            if (pos.dayIndex > 4 || pos.rowStart < 1 || pos.rowStart > HORAS.length * 2) return null;
+          if (pos.tipo === "inicio" && pos.sessao) {
+            const sessao = pos.sessao;
             return (
               <button
-                key={sessao.id}
+                key={horaLabel}
                 type="button"
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", String(sessao.id));
-                  setArrastando(sessao.id);
-                }}
-                onDragEnd={() => setArrastando(null)}
                 onClick={() => abrirPreview(sessao)}
-                className={`m-[3px] cursor-grab overflow-hidden rounded-xl px-2.5 py-2 text-left text-[12px] font-bold text-white shadow-[0_4px_10px_var(--color-shadow)] hover:brightness-95 active:cursor-grabbing ${
-                  sessao.modalidade === "teleconsulta" ? "bg-gold" : "bg-accent"
-                } ${arrastando === sessao.id ? "opacity-40" : ""}`}
-                style={{
-                  gridColumn: pos.dayIndex + 2,
-                  gridRow: `${pos.rowStart} / span ${pos.rowSpan}`,
-                }}
+                className="flex w-full items-center gap-4 border-b border-border px-5 py-3.5 text-left transition-colors last:border-0 hover:bg-accent-soft/40"
               >
-                <span className="block text-[11px] font-semibold opacity-90">
-                  {formatHoraBrasilia(sessao.data_hora)}
-                </span>
-                <span className="block text-[13.5px] font-extrabold">{sessao.paciente_nome}</span>
-                <span className="block truncate text-[10.5px] font-semibold opacity-80">
-                  {sessao.local_nome}
+                <span className="w-12 shrink-0 text-[13px] font-bold text-muted">{horaLabel}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14.5px] font-bold">{sessao.paciente_nome}</div>
+                  <div className="truncate text-[12.5px] text-muted">
+                    {sessao.local_nome} ·{" "}
+                    {sessao.modalidade === "teleconsulta" ? "Teleconsulta" : "Presencial"}
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold ${
+                    sessao.status === "confirmada"
+                      ? "bg-accent-soft text-accent-dark"
+                      : "bg-black/5 text-muted"
+                  }`}
+                >
+                  {sessao.status === "confirmada" ? "Confirmada" : "Concluída"}
                 </span>
               </button>
             );
-          })}
+          }
 
-          {linhaAgora && (
-            <div
-              className="pointer-events-none relative z-10"
-              style={{ gridColumn: linhaAgora.gridColumn, gridRow: linhaAgora.gridRow }}
+          return (
+            <button
+              key={horaLabel}
+              type="button"
+              onClick={() => abrirCriacao(horaLabel)}
+              className="flex w-full items-center gap-4 border-b border-border px-5 py-3.5 text-left text-muted transition-colors last:border-0 hover:bg-accent-soft/40"
             >
-              <div
-                className="absolute left-0 right-0 h-[2px] bg-accent"
-                style={{ top: `${linhaAgora.percentNoSlot}%` }}
-              >
-                <span className="absolute -left-[5px] -top-[4px] h-[10px] w-[10px] rounded-full bg-accent" />
-              </div>
-            </div>
-          )}
-        </div>
+              <span className="w-12 shrink-0 text-[13px] font-bold">{horaLabel}</span>
+              <span className="flex-1 text-[13.5px]">Livre</span>
+            </button>
+          );
+        })}
       </div>
 
       <Modal open={previewAberto} onClose={() => setPreviewAberto(false)} title="Detalhes da sessão">
@@ -393,23 +296,13 @@ export function AgendaGrid({
             <InfoRow label="Paciente" valor={sessaoVisualizando.paciente_nome} />
             <InfoRow label="Local" valor={sessaoVisualizando.local_nome} />
             <div className="grid grid-cols-2 gap-3">
-              <InfoRow
-                label="Data"
-                valor={new Intl.DateTimeFormat("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  timeZone: "America/Sao_Paulo",
-                }).format(new Date(sessaoVisualizando.data_hora))}
-              />
               <InfoRow label="Hora" valor={formatHoraBrasilia(sessaoVisualizando.data_hora)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <InfoRow label="Duração" valor={`${sessaoVisualizando.duracao_minutos} min`} />
-              <InfoRow
-                label="Modalidade"
-                valor={sessaoVisualizando.modalidade === "presencial" ? "Presencial" : "Teleconsulta"}
-              />
             </div>
+            <InfoRow
+              label="Modalidade"
+              valor={sessaoVisualizando.modalidade === "presencial" ? "Presencial" : "Teleconsulta"}
+            />
             <InfoRow label="Anotações" valor={sessaoVisualizando.observacoes || "—"} />
 
             <div className="flex justify-end gap-3 pt-1">
@@ -426,8 +319,9 @@ export function AgendaGrid({
                   setPreviewAberto(false);
                   abrirEdicao(sessaoVisualizando);
                 }}
-                className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+                className="flex items-center gap-1.5 rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark"
               >
+                <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
                 Editar
               </button>
             </div>
@@ -567,8 +461,9 @@ export function AgendaGrid({
                 type="button"
                 onClick={handleCancelarClick}
                 disabled={salvando}
-                className="text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
+                className="flex items-center gap-1 text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
               >
+                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                 Cancelar sessão
               </button>
             ) : (
