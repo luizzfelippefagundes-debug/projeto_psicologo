@@ -12,7 +12,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-INTERVALO_SINCRONIZACAO = timedelta(minutes=10)
+INTERVALO_SINCRONIZACAO = timedelta(minutes=1)
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
