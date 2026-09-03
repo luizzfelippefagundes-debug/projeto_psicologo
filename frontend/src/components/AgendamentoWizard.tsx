@@ -1,6 +1,6 @@
 "use client";
 
-import { Show, SignIn, useAuth, useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { agendarPublico, getHorariosPublico, type ProfissionalPublico } from "@/lib/apiPublico";
@@ -123,7 +123,11 @@ export function AgendamentoWizard({
     setErro(null);
     setCarregando(true);
     const token = await getToken();
-    if (!token) return;
+    if (!token) {
+      setErro("Sessão expirada. Recarregue a página e faça login de novo.");
+      setCarregando(false);
+      return;
+    }
     try {
       await agendarPublico(token, {
         slug,
@@ -147,17 +151,7 @@ export function AgendamentoWizard({
 
   return (
     <div className="mx-auto w-full max-w-[480px]">
-      <Show
-        when="signed-in"
-        fallback={
-          <SignIn
-            routing="hash"
-            forceRedirectUrl={`/agendar/${slug}/novo`}
-            signUpForceRedirectUrl={`/agendar/${slug}/novo`}
-          />
-        }
-      >
-        {confirmado ? (
+      {confirmado ? (
           <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-[0_8px_24px_var(--color-shadow)]">
             <p className="text-[15px] font-semibold text-accent-dark">Consulta agendada!</p>
             <button
@@ -298,9 +292,8 @@ export function AgendamentoWizard({
                 </div>
               </div>
             )}
-          </>
-        )}
-      </Show>
+        </>
+      )}
     </div>
   );
 }

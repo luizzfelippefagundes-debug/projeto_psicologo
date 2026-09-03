@@ -3,18 +3,18 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup"];
-// Rotas públicas de verdade (sem exigir sessão, mas também sem redirecionar quem
-// já está logado — diferente de /login e /signup, que não fazem sentido pra quem
-// já tem sessão. O formulário de anamnese é aberto pelo paciente, sem login, mas
-// a profissional também pode abrir o mesmo link estando logada (ex: pra conferir).
-// /agendar tem autenticação própria (Clerk, do lado do paciente) tratada dentro da
-// própria página — não depende do cookie de sessão da profissional. /sign-in e
-// /sign-up são as páginas geradas pelo Clerk, usadas só pelo fluxo de agendamento.
-const ALWAYS_PUBLIC_PATHS = ["/anamnese", "/agendar", "/sign-in", "/sign-up"];
+// O formulário de anamnese é aberto pelo paciente, sem login — a profissional
+// também pode abrir o mesmo link estando logada (ex: pra conferir).
+const ALWAYS_PUBLIC_PATHS = ["/anamnese"];
 
 function proxyDaProfissional(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (ALWAYS_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // /agendar/* tem seu próprio auth (Clerk, do lado do paciente — ver
+  // ehRotaAgendarProtegida abaixo), não depende do cookie de sessão da profissional.
+  if (
+    ALWAYS_PUBLIC_PATHS.some((path) => pathname.startsWith(path)) ||
+    pathname.startsWith("/agendar")
+  ) {
     return NextResponse.next();
   }
 
@@ -32,11 +32,25 @@ function proxyDaProfissional(request: NextRequest) {
   return NextResponse.next();
 }
 
-// clerkMiddleware por fora garante que a sessão do Clerk (usada só em /agendar/*,
-// pelo paciente) fique disponível pra auth()/useAuth() nas páginas — sem exigir
-// login nenhum aqui no proxy em si. A lógica de auth da profissional (cookie
-// customizado) continua rodando por dentro, sem mudança de comportamento.
-export default clerkMiddleware(async (_auth, request) => {
+// Só as páginas de agendamento em si exigem sessão Clerk do paciente — /entrar e
+// /cadastro (as próprias telas de login/cadastro) ficam de fora, senão ninguém
+// conseguiria nem abrir o login. Retorna o slug pra montar o redirect certo: cada
+// profissional tem seu próprio link/tela de login, não existe um "/entrar" global.
+function ehRotaAgendarProtegida(pathname: string): string | null {
+  if (!pathname.startsWith("/agendar/")) return null;
+  const [slug, sub] = pathname.slice("/agendar/".length).split("/");
+  if (!slug) return null;
+  if (sub === "entrar" || sub === "cadastro") return null;
+  return slug;
+}
+
+export default clerkMiddleware(async (auth, request) => {
+  const slug = ehRotaAgendarProtegida(request.nextUrl.pathname);
+  if (slug) {
+    await auth.protect({
+      unauthenticatedUrl: new URL(`/agendar/${slug}/entrar`, request.url).toString(),
+    });
+  }
   return proxyDaProfissional(request);
 });
 

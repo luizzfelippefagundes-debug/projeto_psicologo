@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/nextjs";
+import { ptBR } from "@clerk/localizations";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
@@ -47,7 +48,28 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex antialiased" suppressHydrationWarning>
-        <ClerkProvider>
+        <ClerkProvider
+          localization={ptBR}
+          appearance={{
+            variables: {
+              colorPrimary: "#a8768a",
+              colorBackground: "#ffffff",
+              colorForeground: "#3a2f2f",
+              colorMutedForeground: "#8a7873",
+              colorInput: "#ffffff",
+              colorInputForeground: "#3a2f2f",
+              colorBorder: "#ddd0c9",
+              colorDanger: "#dc2626",
+              borderRadius: "14px",
+              fontFamily: "var(--font-inter), sans-serif",
+            },
+            elements: {
+              card: "border border-[#ddd0c9] shadow-md",
+              headerTitle: "hidden",
+              headerSubtitle: "hidden",
+            },
+          }}
+        >
           <PwaRegister />
           {children}
         </ClerkProvider>

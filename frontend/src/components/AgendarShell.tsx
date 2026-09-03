@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarClock, Home, ListChecks, LogOut } from "lucide-react";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { SignOutButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { iniciais } from "@/lib/format";
 
@@ -17,8 +17,6 @@ export function AgendarShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { signOut } = useClerk();
-  const { isSignedIn } = useUser();
 
   const base = `/agendar/${slug}`;
   const NAV_ITEMS = [
@@ -38,16 +36,17 @@ export function AgendarShell({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
-          {isSignedIn && (
+          {/* Rotas dentro desse layout só renderizam pra quem já passou pela checagem de
+              auth.protect() no proxy.ts — sempre logado aqui, sem precisar checar isSignedIn. */}
+          <SignOutButton redirectUrl={`${base}/entrar`}>
             <button
               type="button"
-              onClick={() => signOut({ redirectUrl: base })}
               aria-label="Sair"
               className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-border bg-card text-muted"
             >
               <LogOut className="h-4 w-4" strokeWidth={2} />
             </button>
-          )}
+          </SignOutButton>
         </div>
       </header>
 
