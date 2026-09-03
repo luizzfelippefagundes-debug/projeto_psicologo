@@ -26,12 +26,6 @@ async function fetchPublico<T>(path: string, token: string, init?: RequestInit):
   return res.json();
 }
 
-export async function getProfissionalPublico(slug: string): Promise<ProfissionalPublico> {
-  const res = await fetch(`${API_URL}/publico/profissional/${slug}`);
-  if (!res.ok) throw new Error("Link inválido.");
-  return res.json();
-}
-
 export function getHorariosPublico(
   slug: string, localId: number, data: string, token: string
 ): Promise<{ horarios: string[] }> {

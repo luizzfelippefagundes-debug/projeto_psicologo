@@ -3,6 +3,7 @@ usados pelo frontend do paciente — não confundir com os endpoints internos do
 profissional em main.py (autenticados via cookie de sessão)."""
 from datetime import date, datetime
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
@@ -34,6 +35,7 @@ async def obter_profissional_publico(slug: str):
 @router.get("/horarios")
 async def horarios_publico(
     slug: str, local_id: int, data: date, duracao_minutos: int = 50,
+    clerk_user_id: str = Depends(get_current_clerk_user_id),
 ):
     async with db.pool.acquire() as conn:
         profissional = await _buscar_profissional_por_slug(conn, slug)
@@ -86,19 +88,37 @@ async def agendar_publico(body: AgendarBody, clerk_user_id: str = Depends(get_cu
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Primeira consulta: informe nome, telefone e consentimento LGPD.",
                 )
-            tipo_procedimento = "neuromodulacao" if body.procedimento_estimulacao else None
-            paciente = await conn.fetchrow(
-                """
-                INSERT INTO pacientes (
-                    profissional_id, nome, telefone, email, data_nascimento, tipo_procedimento,
-                    tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data, clerk_user_id
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, 'individual', true, now(), $7)
-                RETURNING id, nome, email, telefone, tipo_procedimento, data_nascimento
-                """,
-                profissional["id"], body.nome, body.telefone, body.email, body.data_nascimento,
-                tipo_procedimento, clerk_user_id,
+            # Mesmo telefone + primeiro nome já pode existir sem clerk_user_id — cadastrado
+            # antes pelo bot do WhatsApp ou pelo painel. profissional_id + telefone é único
+            # no banco, então inserir direto quebraria pra quem já é paciente e só está
+            # entrando pela primeira vez pelo link web (mesmo bug já corrigido no bot — ver
+            # comentário de _buscar_ou_criar_paciente em bot.py). Nesse caso só vincula a
+            # conta Clerk ao cadastro existente em vez de duplicar.
+            paciente_existente = await conn.fetchrow(
+                "SELECT id FROM pacientes WHERE profissional_id = $1 AND telefone = $2 "
+                "AND split_part(nome, ' ', 1) ILIKE split_part($3, ' ', 1)",
+                profissional["id"], body.telefone, body.nome,
             )
+            if paciente_existente is not None:
+                paciente = await conn.fetchrow(
+                    "UPDATE pacientes SET clerk_user_id = $1 WHERE id = $2 "
+                    "RETURNING id, nome, email, telefone, tipo_procedimento, data_nascimento",
+                    clerk_user_id, paciente_existente["id"],
+                )
+            else:
+                tipo_procedimento = "neuromodulacao" if body.procedimento_estimulacao else None
+                paciente = await conn.fetchrow(
+                    """
+                    INSERT INTO pacientes (
+                        profissional_id, nome, telefone, email, data_nascimento, tipo_procedimento,
+                        tipo_atendimento, consentimento_lgpd, consentimento_lgpd_data, clerk_user_id
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, 'individual', true, now(), $7)
+                    RETURNING id, nome, email, telefone, tipo_procedimento, data_nascimento
+                    """,
+                    profissional["id"], body.nome, body.telefone, body.email, body.data_nascimento,
+                    tipo_procedimento, clerk_user_id,
+                )
 
         whatsapp_instance = await conn.fetchval(
             "SELECT whatsapp_instance FROM profissionais WHERE id = $1", profissional["id"]
@@ -115,13 +135,11 @@ async def agendar_publico(body: AgendarBody, clerk_user_id: str = Depends(get_cu
                 modalidade=body.modalidade,
                 whatsapp_instance=whatsapp_instance,
             )
-        except Exception as e:
-            if "exclusion" in str(type(e)).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Esse horário acabou de ser ocupado. Escolha outro.",
-                )
-            raise
+        except asyncpg.exceptions.ExclusionViolationError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Esse horário acabou de ser ocupado. Escolha outro.",
+            )
 
     return {"sessao_id": sessao["id"], "data_hora": sessao["data_hora"].isoformat()}
 

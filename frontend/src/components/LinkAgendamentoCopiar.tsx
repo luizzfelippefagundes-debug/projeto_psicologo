@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 export function LinkAgendamentoCopiar({ slug }: { slug: string }) {
   const [copiado, setCopiado] = useState(false);
-  const link =
-    typeof window !== "undefined" ? `${window.location.origin}/agendar/${slug}` : `/agendar/${slug}`;
+  // Começa com o caminho relativo (igual ao que o servidor renderiza) e só troca pra URL
+  // completa depois de montar no navegador — usar window.location.origin direto no render
+  // causaria mismatch de hidratação (servidor não tem window, primeira pintura do cliente tem).
+  const [link, setLink] = useState(`/agendar/${slug}`);
+
+  useEffect(() => {
+    setLink(`${window.location.origin}/agendar/${slug}`);
+  }, [slug]);
 
   function copiar() {
     navigator.clipboard.writeText(link);
