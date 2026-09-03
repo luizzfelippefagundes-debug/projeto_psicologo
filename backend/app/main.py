@@ -159,6 +159,23 @@ async def criar_local(body: LocalBody, profissional_id: int = Depends(auth.get_c
     return dict(row)
 
 
+@app.delete("/locais/{local_id}")
+async def excluir_local(local_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        try:
+            resultado = await conn.execute(
+                "DELETE FROM locais WHERE id = $1 AND profissional_id = $2", local_id, profissional_id
+            )
+        except asyncpg.exceptions.ForeignKeyViolationError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Não é possível excluir: existem sessões ou pessoas na lista de espera vinculadas a esse local.",
+            )
+    if resultado == "DELETE 0":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local não encontrado")
+    return {"status": "excluido"}
+
+
 class RegraHorarioBody(BaseModel):
     local_id: int
     dias_semana: list[int]

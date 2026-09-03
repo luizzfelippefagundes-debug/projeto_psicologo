@@ -1,5 +1,6 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NovoLocalForm } from "@/components/NovoLocalForm";
+import { LocaisList } from "@/components/LocaisList";
 import { RegrasHorarioManager } from "@/components/RegrasHorarioManager";
 import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
 import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
@@ -28,18 +29,7 @@ export default async function ConfiguracoesPage() {
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
         <h2 className="mb-4 text-[16px] font-bold">Locais de atendimento</h2>
         <NovoLocalForm />
-        {locais.length > 0 && (
-          <ul className="mt-5 flex flex-wrap gap-2">
-            {locais.map((local) => (
-              <li
-                key={local.id}
-                className="rounded-full bg-accent-soft px-3.5 py-1.5 text-[13.5px] font-semibold text-accent-dark"
-              >
-                {local.nome}
-              </li>
-            ))}
-          </ul>
-        )}
+        <LocaisList locais={locais} />
       </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
