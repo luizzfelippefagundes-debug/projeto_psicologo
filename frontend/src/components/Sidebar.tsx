@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Brain, Calendar, Home, LogOut, Menu, Settings, Users } from "lucide-react";
 import { logout } from "@/lib/auth-client";
+import type { Profissional } from "@/lib/api";
+import { iniciais } from "@/lib/format";
 
 const NAV_ITEMS = [
   { href: "/", label: "Visão geral", Icon: Home },
@@ -13,7 +15,7 @@ const NAV_ITEMS = [
   { href: "/configuracoes", label: "Configurações", Icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ profissional }: { profissional: Profissional }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -38,7 +40,7 @@ export function Sidebar() {
           Consultório
         </div>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -59,14 +61,30 @@ export function Sidebar() {
           })}
         </nav>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="mt-auto flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[14.5px] font-semibold text-muted transition-colors hover:bg-accent-soft hover:text-fg"
-        >
-          <LogOut className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
-          Sair
-        </button>
+        <div className="flex items-center gap-2.5 border-t border-border pt-5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[12.5px] font-extrabold text-accent-dark">
+            {iniciais(profissional.nome)}
+          </div>
+          <div className="min-w-0 flex-1 truncate text-[13.5px] font-bold" title={profissional.nome}>
+            {profissional.nome}
+          </div>
+          <Link
+            href="/configuracoes"
+            onClick={() => setOpen(false)}
+            aria-label="Configurações"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-fg"
+          >
+            <Settings className="h-4 w-4" strokeWidth={2} />
+          </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Sair"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-fg"
+          >
+            <LogOut className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
       </aside>
 
       {open && (
