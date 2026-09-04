@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, LockOpen, Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
@@ -157,6 +157,16 @@ export function AgendaList({
   const [bloqueando, setBloqueando] = useState<{ hora: string } | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [duracaoBloqueio, setDuracaoBloqueio] = useState("60");
+
+  // Atualiza sozinho a cada 30s — sem isso, um compromisso marcado no Google Calendar
+  // (sincronizado no servidor a cada 1min) só aparecia aqui depois de recarregar a
+  // página manualmente. Pausa enquanto algum modal estiver aberto pra não interromper
+  // o que a profissional estiver preenchendo.
+  useEffect(() => {
+    if (modalAberto || previewAberto || bloqueando) return;
+    const id = setInterval(() => router.refresh(), 30_000);
+    return () => clearInterval(id);
+  }, [modalAberto, previewAberto, bloqueando, router]);
 
   function abrirCriacao(horaInicial?: string) {
     setSessaoEditando(null);
