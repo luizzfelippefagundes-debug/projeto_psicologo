@@ -16,13 +16,41 @@ import {
 } from "@/lib/format";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
-const HORAS = Array.from({ length: 14 }, (_, i) => 7 + i); // 07:00 .. 20:00
+const HORA_INICIO_PADRAO = 7;
+const HORA_FIM_PADRAO = 20; // 07:00 .. 20:00 quando não há nada fora dessa janela
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-const SLOTS = HORAS.flatMap((hora) => [0, 30].map((minuto) => `${pad2(hora)}:${pad2(minuto)}`));
+// A grade sempre cobre pelo menos 07:00–20:00, mas se tiver sessão ou bloqueio
+// (inclusive vindo do Google Calendar) fora desse intervalo, estica pra incluir —
+// senão um compromisso bem cedo ou tarde some da tela mesmo já estando sincronizado
+// (bug real: um evento do Google às 06:00 sincronizava certinho no banco, mas nunca
+// aparecia porque a grade só começava às 07:00).
+function calcularSlots(sessoes: SessaoPeriodo[], bloqueios: Bloqueio[], diaISO: string): string[] {
+  let inicioHora = HORA_INICIO_PADRAO;
+  let fimHora = HORA_FIM_PADRAO;
+
+  for (const sessao of sessoes) {
+    const { minutos } = partesBrasilia(sessao.data_hora);
+    const fimMinutos = minutos + sessao.duracao_minutos;
+    inicioHora = Math.min(inicioHora, Math.floor(minutos / 60));
+    fimHora = Math.max(fimHora, Math.ceil(fimMinutos / 60));
+  }
+  for (const bloqueio of bloqueios) {
+    const ini = partesBrasilia(bloqueio.data_inicio);
+    const fim = partesBrasilia(bloqueio.data_fim);
+    const inicioMinutos = ini.dataISO < diaISO ? 0 : ini.minutos;
+    const fimMinutos = fim.dataISO > diaISO ? 24 * 60 : fim.minutos;
+    inicioHora = Math.min(inicioHora, Math.floor(inicioMinutos / 60));
+    fimHora = Math.max(fimHora, Math.ceil(fimMinutos / 60));
+  }
+  fimHora = Math.min(fimHora, 24);
+
+  const horas = Array.from({ length: fimHora - inicioHora }, (_, i) => inicioHora + i);
+  return horas.flatMap((hora) => [0, 30].map((minuto) => `${pad2(hora)}:${pad2(minuto)}`));
+}
 
 type FormState = {
   pacienteId: string;
@@ -140,6 +168,7 @@ export function AgendaList({
   pacientes: Paciente[];
 }) {
   const router = useRouter();
+  const slots = calcularSlots(sessoes, bloqueios, diaISO);
   const [modalAberto, setModalAberto] = useState(false);
   const [previewAberto, setPreviewAberto] = useState(false);
   const [sessaoVisualizando, setSessaoVisualizando] = useState<SessaoPeriodo | null>(null);
@@ -346,7 +375,7 @@ export function AgendaList({
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-        {SLOTS.map((horaLabel) => {
+        {slots.map((horaLabel) => {
           const pos = posicaoDoSlot(sessoes, bloqueios, horaLabel, diaISO);
 
           if (pos.tipo === "sessao-continuacao" || pos.tipo === "bloqueio-continuacao") {
