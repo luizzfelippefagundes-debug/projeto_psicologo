@@ -76,6 +76,7 @@ CREATE TABLE sessoes (
     lembrete_enviado BOOLEAN NOT NULL DEFAULT false,
     expira_em TIMESTAMPTZ, -- só preenchido quando status = 'reservado'; prazo do hold
     lembrete_expiracao_enviado BOOLEAN NOT NULL DEFAULT false, -- evita mandar o aviso de hold quase expirando 2x
+    pos_consulta_enviado BOOLEAN NOT NULL DEFAULT false, -- evita mandar a mensagem de acompanhamento do dia seguinte 2x
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (
