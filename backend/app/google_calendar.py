@@ -176,16 +176,39 @@ async def remover_evento_google(profissional_id: int, google_event_id: str) -> N
         )
 
 
-async def puxar_eventos_do_google(profissional_id: int) -> dict:
-    access_token = await _access_token_valido(profissional_id)
-    if access_token is None:
-        return {"erro": "Não conectado ao Google Calendar."}
+# IDs de agenda de feriados públicos do Google (ex: "pt.brazilian#holiday@group.v.calendar.google.com")
+# — não são compromissos da profissional, então nunca devem virar bloqueio de horário.
+_SUFIXO_AGENDA_FERIADOS = "#holiday@group.v.calendar.google.com"
 
-    conexao = await obter_conexao(profissional_id)
+
+async def _listar_agendas_adicionais(access_token: str, calendar_id_principal: str) -> list[str]:
+    """Agendas secundárias que a profissional também enxerga no Google (compartilhadas,
+    de trabalho, etc) além da principal — pra bloquear o horário quando ela marcar
+    compromisso ali, seja pessoal ou não. Feriados ficam de fora."""
+    async with httpx.AsyncClient() as client:
+        resposta = await client.get(
+            f"{CALENDAR_API}/users/me/calendarList",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        resposta.raise_for_status()
+        return [
+            item["id"]
+            for item in resposta.json().get("items", [])
+            if item["id"] != calendar_id_principal and not item["id"].endswith(_SUFIXO_AGENDA_FERIADOS)
+        ]
+
+
+async def _sincronizar_calendario(
+    profissional_id: int, calendar_id: str, access_token: str, *, sync_token: str | None
+) -> dict:
+    """Sincroniza um calendário específico pra dentro de bloqueios_horario. Quando
+    `sync_token` é passado, usa sincronização incremental (só o que mudou) e devolve o
+    token novo pra persistir; senão busca sempre a janela de 90 dias a partir de agora
+    (usado pras agendas secundárias, que não têm token próprio guardado)."""
     headers = {"Authorization": f"Bearer {access_token}"}
     params = {"singleEvents": "true", "showDeleted": "true"}
-    if conexao["sync_token"]:
-        params["syncToken"] = conexao["sync_token"]
+    if sync_token:
+        params["syncToken"] = sync_token
     else:
         # Sync inicial (sem syncToken): limita a janela pra não puxar décadas de eventos
         # recorrentes (ex: aniversário anual vira um evento por ano, indo até o fim dos tempos).
@@ -194,20 +217,15 @@ async def puxar_eventos_do_google(profissional_id: int) -> dict:
         params["timeMax"] = (agora + timedelta(days=90)).isoformat()
 
     criados = atualizados = removidos = ignorados = 0
-    novo_sync_token = conexao["sync_token"]
+    novo_sync_token = sync_token
 
     async with httpx.AsyncClient() as client:
-        url = f"{CALENDAR_API}/calendars/{conexao['calendar_id']}/events"
+        url = f"{CALENDAR_API}/calendars/{calendar_id}/events"
         while url:
             resposta = await client.get(url, params=params, headers=headers)
             if resposta.status_code == 410:
                 # syncToken expirado — reseta e faz sync completo na próxima chamada
-                async with db.pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE google_conexoes SET sync_token = NULL WHERE profissional_id = $1",
-                        profissional_id,
-                    )
-                return {"erro": "Sincronização expirada, tente novamente."}
+                return {"erro": "sync_token_expirado"}
             resposta.raise_for_status()
             corpo = resposta.json()
 
@@ -269,18 +287,74 @@ async def puxar_eventos_do_google(profissional_id: int) -> dict:
                         criados += 1
 
             novo_sync_token = corpo.get("nextSyncToken", novo_sync_token)
-            url = corpo.get("nextPageToken") and f"{CALENDAR_API}/calendars/{conexao['calendar_id']}/events"
+            url = corpo.get("nextPageToken") and f"{CALENDAR_API}/calendars/{calendar_id}/events"
             params = {"pageToken": corpo["nextPageToken"]} if corpo.get("nextPageToken") else params
             if not corpo.get("nextPageToken"):
                 break
 
+    return {
+        "criados": criados, "atualizados": atualizados, "removidos": removidos,
+        "ignorados": ignorados, "sync_token": novo_sync_token,
+    }
+
+
+async def puxar_eventos_do_google(profissional_id: int) -> dict:
+    access_token = await _access_token_valido(profissional_id)
+    if access_token is None:
+        return {"erro": "Não conectado ao Google Calendar."}
+
+    conexao = await obter_conexao(profissional_id)
+
+    resultado_principal = await _sincronizar_calendario(
+        profissional_id, conexao["calendar_id"], access_token, sync_token=conexao["sync_token"]
+    )
+    if resultado_principal.get("erro") == "sync_token_expirado":
+        async with db.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE google_conexoes SET sync_token = NULL WHERE profissional_id = $1", profissional_id
+            )
+        return {"erro": "Sincronização expirada, tente novamente."}
+
     async with db.pool.acquire() as conn:
         await conn.execute(
             "UPDATE google_conexoes SET sync_token = $1 WHERE profissional_id = $2",
-            novo_sync_token, profissional_id,
+            resultado_principal["sync_token"], profissional_id,
         )
 
-    return {"criados": criados, "atualizados": atualizados, "removidos": removidos, "ignorados": ignorados}
+    totais = {
+        "criados": resultado_principal["criados"],
+        "atualizados": resultado_principal["atualizados"],
+        "removidos": resultado_principal["removidos"],
+        "ignorados": resultado_principal["ignorados"],
+    }
+
+    # Agendas secundárias (compartilhadas, de trabalho etc): sem token próprio guardado,
+    # então cada ciclo busca de novo a janela de 90 dias — writes redundantes em compromissos
+    # que não mudaram, mas o volume é pequeno o bastante (poucas agendas, poucos eventos) pra
+    # não ser um problema real de custo/carga.
+    try:
+        adicionais = await _listar_agendas_adicionais(access_token, conexao["calendar_id"])
+    except Exception:
+        logger.exception("Falha ao listar agendas adicionais do Google (profissional_id=%s)", profissional_id)
+        adicionais = []
+
+    for calendar_id in adicionais:
+        try:
+            resultado = await _sincronizar_calendario(profissional_id, calendar_id, access_token, sync_token=None)
+        except Exception:
+            logger.exception(
+                "Falha ao sincronizar agenda adicional do Google (profissional_id=%s, calendar_id=%s)",
+                profissional_id, calendar_id,
+            )
+            continue
+        if resultado.get("erro"):
+            continue
+        totais["criados"] += resultado["criados"]
+        totais["atualizados"] += resultado["atualizados"]
+        totais["removidos"] += resultado["removidos"]
+        totais["ignorados"] += resultado["ignorados"]
+
+    return totais
 
 
 async def _sincronizar_todos_conectados() -> None:
