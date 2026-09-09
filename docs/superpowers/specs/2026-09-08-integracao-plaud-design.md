@@ -8,10 +8,17 @@ hoje essas gravações ficam isoladas no ecossistema Plaud, sem nenhuma ligaçã
 sistema de agendamento/prontuário. O objetivo é trazer o resumo e a transcrição de
 cada gravação pra dentro da sessão correspondente no nosso sistema.
 
-A Plaud expõe isso via **Plaud Embedded**, uma developer platform em research preview
-(portal.plaud.ai / dev.plaud.ai): registro de app (Client ID + Client Secret), geração
-de API Key, e uma Transcription API que devolve transcrição + resumo em JSON a partir
-de um áudio.
+A Plaud tem uma developer platform própria (Plaud Embedded, portal.plaud.ai) — mas
+ela é só pra **enviar um áudio novo pra ser transcrito** (upload + polling de
+resultado), não pra **buscar gravações que já existem** na conta da profissional. Não
+existe endpoint de "listar minhas gravações". Por isso essa via foi descartada.
+
+O caminho real é a **integração oficial da Plaud com o Zapier**: existe um gatilho
+("Transcript & Summary Ready") que dispara automaticamente toda vez que uma
+transcrição/resumo termina de processar na conta dela. Ligando esse gatilho a uma
+ação "Webhooks by Zapier → POST", dá pra mandar esses dados pro nosso backend assim
+que ficam prontos — sem precisar de credencial de desenvolvedor da Plaud, sem OAuth,
+só a profissional configurando 1 Zap (uma vez) na conta Zapier dela.
 
 ## Objetivo
 
@@ -29,10 +36,8 @@ tela da sessão no nosso sistema, buscar essa gravação, vincular à sessão ce
   um loop de fundo puxando eventos periodicamente), aqui a busca de gravação é sempre
   uma ação manual da profissional, sessão por sessão. Não existe um "gatilho" que
   dispare sozinho.
-- **Sem webhook.** Não confirmamos se a Plaud oferece notificação push de gravação
-  pronta, e o fluxo manual escolhido não depende disso.
-- **Sem tela de gerenciamento de gravações** (listar/desvincular/editar depois). Só a
-  ação de buscar e vincular.
+- **Sem tela de gerenciamento de gravações** (listar todas/desvincular/editar depois,
+  fora da tela da sessão). Só a ação de vincular, a partir da sessão.
 - **Sem novo campo de consentimento específico pra gravação.** O consentimento de
   gravar a sessão é conversa da profissional com o paciente, fora do sistema — o
   `consentimento_lgpd` que já existe em `pacientes` é sobre tratamento de dados em
@@ -41,59 +46,69 @@ tela da sessão no nosso sistema, buscar essa gravação, vincular à sessão ce
 
 ## Arquitetura
 
-### 1. Conexão com a Plaud (mesmo padrão do Google Calendar)
+### 1. Recebendo gravações — webhook do Zapier
 
-Um novo card em Configurações, "Plaud", espelhando o card já existente do Google
-Calendar (`GoogleCalendarConexao.tsx`): botão "Conectar Plaud" inicia o fluxo de
-autorização; ao voltar, as credenciais da profissional ficam guardadas numa tabela
-nova:
+Cada profissional ganha uma **URL de webhook própria e secreta**, construída com um
+token aleatório (mesmo padrão já usado pro token da anamnese —
+`secrets.token_urlsafe(32)`), gerado uma vez e guardado em
+`profissionais.plaud_webhook_token`:
 
-```sql
-CREATE TABLE plaud_conexoes (
-    profissional_id INTEGER PRIMARY KEY REFERENCES profissionais(id) ON DELETE CASCADE,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT,
-    access_token_expira_em TIMESTAMPTZ,
-    conectado_em TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+```
+POST https://api.nexosystem.online/plaud/webhook/<token>
 ```
 
-Os campos exatos do token (se é OAuth authorization-code como o Google, ou um modelo
-mais simples de API Key por conta) só serão confirmados quando tivermos acesso real à
-documentação completa da Plaud Embedded — a estrutura acima é a expectativa razoável
-por analogia com o Google Calendar, mas pode precisar ajuste nessa fase.
+Um card novo em Configurações, "Plaud", mostra essa URL (com botão de copiar, mesmo
+componente `LinkAgendamentoCopiar.tsx` já usado pro link de agendamento) e o passo a
+passo pra ela configurar o Zap:
 
-Novo módulo backend `app/plaud.py`, espelhando a organização de `app/google_calendar.py`.
+1. Criar um Zap no Zapier.
+2. Gatilho: Plaud → "Transcript & Summary Ready".
+3. Ação: "Webhooks by Zapier" → POST, URL = a URL copiada daqui.
+
+Cada gravação que chega vira uma linha "solta" (sem sessão vinculada ainda) em
+`plaud_gravacoes`. O corpo exato que o Zapier envia só será confirmado na prática
+(depende de como ela mapear os campos no próprio Zap) — por isso o endpoint guarda o
+payload bruto inteiro (`payload_bruto JSONB`) sempre, e faz o melhor esforço pra
+extrair `resumo`/`transcricao`/`gravado_em` dos campos mais prováveis. Isso garante
+que nenhuma gravação é perdida mesmo se o mapeamento inicial não pegar 100% dos
+campos — dá pra reprocessar `payload_bruto` depois sem perder dado.
+
+Novo módulo backend `app/plaud.py`.
 
 ### 2. Vincular gravação a uma sessão
 
 Na tela de edição da sessão (`AgendaList.tsx`, onde já existem as "Observações"), um
-botão novo "Buscar gravação Plaud":
+botão novo "Vincular gravação Plaud":
 
-1. Chama um endpoint nosso (`GET /plaud/gravacoes?perto_de=<data_hora_da_sessao>`),
-   que por sua vez consulta a API da Plaud pelas gravações recentes da profissional
-   (filtradas por uma janela de tempo perto do horário da sessão, pra facilitar achar
-   a certa — mas a escolha final é sempre dela, nunca automática).
-2. Mostra uma lista simples (horário de início, duração) num modal.
+1. Chama `GET /plaud/gravacoes-disponiveis` — lista as gravações que chegaram via
+   webhook pra essa profissional e **ainda não foram vinculadas a nenhuma sessão**,
+   ordenadas por proximidade do horário da sessão atual (mais perto primeiro), mas
+   sempre mostrando todas as não vinculadas — a escolha final é sempre dela.
+2. Mostra um modal com a lista (horário de recebimento, resumo curto como prévia).
 3. Ela escolhe a gravação certa e confirma.
-4. O backend busca a transcrição + resumo dessa gravação específica na Plaud, salva,
-   e atualiza as observações da sessão.
+4. `PATCH /plaud/gravacoes/{id}/vincular` com `{sessao_id}` grava o vínculo e atualiza
+   as observações da sessão.
 
 ### 3. Armazenamento
 
 ```sql
 CREATE TABLE plaud_gravacoes (
     id SERIAL PRIMARY KEY,
-    sessao_id INTEGER NOT NULL UNIQUE REFERENCES sessoes(id) ON DELETE CASCADE,
-    plaud_recording_id VARCHAR(255) NOT NULL,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+    sessao_id INTEGER REFERENCES sessoes(id) ON DELETE CASCADE, -- nulo até ser vinculada
     transcricao TEXT,
     resumo TEXT,
-    vinculado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    gravado_em TIMESTAMPTZ, -- extraído do payload quando disponível; senão nulo
+    payload_bruto JSONB NOT NULL,
+    recebido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    vinculado_em TIMESTAMPTZ
 );
 ```
 
-`sessao_id UNIQUE` — uma gravação vinculada por sessão (se ela vincular de novo,
-substitui a anterior; não empilha várias gravações na mesma sessão).
+`sessao_id` é nulo até ela vincular manualmente — o Postgres permite múltiplos `NULL`
+numa coluna, então não precisa de índice único parcial pra isso funcionar. Uma sessão
+só pode ter uma gravação vinculada por vez: antes de vincular, o backend desvincula
+(`sessao_id = NULL`) qualquer gravação anterior que já apontava pra essa sessão.
 
 Ao vincular com sucesso:
 
@@ -115,8 +130,11 @@ Ao vincular com sucesso:
 
 ## Bloqueio para implementação
 
-Preciso que a profissional (ou o usuário, em nome dela) crie acesso de desenvolvedor
-em portal.plaud.ai / dev.plaud.ai e forneça Client ID, Client Secret e API Key antes
-de qualquer teste de ponta a ponta contra a API real da Plaud ser possível. A
-implementação do banco, dos endpoints e da tela pode avançar sem isso, mas fica sem
-verificação real até as credenciais existirem.
+Não sabemos ainda o formato exato do JSON que o Zapier manda no POST — isso só se
+confirma configurando o Zap de verdade e mandando um payload real pro endpoint. Por
+isso o design guarda `payload_bruto` sempre (nunca perde a gravação mesmo que a
+extração de campos específicos falhe) e o plano de implementação separa "receber e
+guardar o payload bruto" (não depende de nada externo, dá pra construir e testar
+agora) de "extrair os campos certos do payload" (só dá pra fazer certo depois de ver
+um payload real — a profissional precisa configurar o Zap e disparar uma gravação de
+teste nessa fase).
