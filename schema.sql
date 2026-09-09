@@ -97,6 +97,22 @@ CREATE TRIGGER trg_sessoes_calc_fim
     BEFORE INSERT OR UPDATE ON sessoes
     FOR EACH ROW EXECUTE FUNCTION sessoes_calc_fim();
 
+-- Token secreto usado na URL do webhook da Plaud (POST /plaud/webhook/<token>) —
+-- cada profissional tem o seu, gerado uma vez.
+ALTER TABLE profissionais ADD COLUMN plaud_webhook_token VARCHAR(64) UNIQUE;
+
+CREATE TABLE plaud_gravacoes (
+    id SERIAL PRIMARY KEY,
+    profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+    sessao_id INTEGER REFERENCES sessoes(id) ON DELETE CASCADE, -- nulo até ser vinculada manualmente
+    transcricao TEXT,
+    resumo TEXT,
+    gravado_em TIMESTAMPTZ, -- extraído do payload do Zapier quando disponível
+    payload_bruto JSONB NOT NULL, -- corpo bruto recebido do Zapier, sempre guardado
+    recebido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    vinculado_em TIMESTAMPTZ
+);
+
 CREATE TABLE anamnese_respostas (
     id SERIAL PRIMARY KEY,
     paciente_id INTEGER NOT NULL UNIQUE REFERENCES pacientes(id) ON DELETE CASCADE,
