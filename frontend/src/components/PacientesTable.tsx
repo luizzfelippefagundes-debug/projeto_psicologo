@@ -511,6 +511,31 @@ export function PacientesTable({
     router.refresh();
   }
 
+  async function handleExcluir() {
+    if (!pacienteEditando) return;
+    const confirmado = confirm(
+      `Excluir "${pacienteEditando.nome}"? Isso apaga também todas as sessões e anamneses desse ` +
+        "paciente — não é possível desfazer. Se só quiser tirá-lo da lista de pacientes ativos, use " +
+        'o campo "Status" (Inativo) em vez de excluir.'
+    );
+    if (!confirmado) return;
+
+    setSalvando(true);
+    const res = await fetch(`${API_URL}/pacientes/${pacienteEditando.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErro(data.detail ?? "Não deu pra excluir o paciente.");
+      setSalvando(false);
+      return;
+    }
+    setSalvando(false);
+    setModalAberto(false);
+    router.refresh();
+  }
+
   return (
     <>
       <div className="mb-4 flex justify-end">
@@ -711,7 +736,19 @@ export function PacientesTable({
 
           {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
 
-          <div className="flex justify-end pt-1">
+          <div className="flex items-center justify-between gap-4 pt-1">
+            {pacienteEditando ? (
+              <button
+                type="button"
+                onClick={handleExcluir}
+                disabled={salvando}
+                className="text-[13.5px] font-semibold text-red-600 hover:underline disabled:opacity-60"
+              >
+                Excluir paciente
+              </button>
+            ) : (
+              <span />
+            )}
             <button
               type="submit"
               disabled={salvando}

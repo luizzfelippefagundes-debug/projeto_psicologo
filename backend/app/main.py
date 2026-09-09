@@ -395,6 +395,21 @@ async def editar_paciente(
     return dict(row)
 
 
+@app.delete("/pacientes/{paciente_id}")
+async def excluir_paciente(paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)):
+    # profissionais.telefone/nome não têm proteção de FK como locais tinham (sessões e
+    # anamnese referenciam paciente_id com ON DELETE CASCADE) — excluir um paciente já
+    # apaga as sessões e anamneses dele junto. O aviso disso fica a cargo do frontend
+    # (confirmação antes de chamar esse endpoint), não do backend.
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "DELETE FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+    if resultado == "DELETE 0":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+    return {"status": "excluido"}
+
+
 @app.get("/pacientes/{paciente_id}")
 async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
