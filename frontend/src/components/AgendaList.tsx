@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Lock, LockOpen, Pencil, Plus, X } from "lucide-react";
+import { Lock, LockOpen, Mic, Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
+import type { PlaudGravacaoDetalhe, PlaudGravacaoDisponivel } from "@/lib/api";
 import {
+  formatDataHoraBrasilia,
   formatDiaMesCurto,
   formatDiaSemanaCurto,
   formatHoraBrasilia,
@@ -186,6 +188,11 @@ export function AgendaList({
   const [bloqueando, setBloqueando] = useState<{ hora: string } | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [duracaoBloqueio, setDuracaoBloqueio] = useState("60");
+  const [gravacoesDisponiveis, setGravacoesDisponiveis] = useState<PlaudGravacaoDisponivel[]>([]);
+  const [modalPlaudAberto, setModalPlaudAberto] = useState(false);
+  const [vinculandoGravacao, setVinculandoGravacao] = useState(false);
+  const [gravacaoVinculada, setGravacaoVinculada] = useState<PlaudGravacaoDetalhe | null>(null);
+  const [transcricaoAberta, setTranscricaoAberta] = useState(false);
 
   // Atualiza sozinho a cada 30s — sem isso, um compromisso marcado no Google Calendar
   // (sincronizado no servidor a cada 1min) só aparecia aqui depois de recarregar a
@@ -205,6 +212,8 @@ export function AgendaList({
   }
 
   function abrirEdicao(sessao: SessaoPeriodo) {
+    setGravacaoVinculada(null);
+    setTranscricaoAberta(false);
     setSessaoEditando(sessao);
     setForm(sessaoParaFormState(sessao));
     setErro(null);
@@ -322,6 +331,38 @@ export function AgendaList({
     setSalvando(false);
     setModalAberto(false);
     router.refresh();
+  }
+
+  async function abrirBuscaPlaud() {
+    const res = await fetch(`${API_URL}/plaud/gravacoes-disponiveis`, { credentials: "include" });
+    if (res.ok) setGravacoesDisponiveis(await res.json());
+    setModalPlaudAberto(true);
+  }
+
+  async function vincularPlaud(gravacaoId: number) {
+    if (!sessaoEditando) return;
+    setVinculandoGravacao(true);
+    await fetch(`${API_URL}/plaud/gravacoes/${gravacaoId}/vincular`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ sessao_id: sessaoEditando.id }),
+    });
+    setVinculandoGravacao(false);
+    setModalPlaudAberto(false);
+    router.refresh();
+  }
+
+  async function carregarTranscricao() {
+    if (!sessaoEditando?.plaud_gravacao_id || gravacaoVinculada) {
+      setTranscricaoAberta((v) => !v);
+      return;
+    }
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${sessaoEditando.plaud_gravacao_id}`, {
+      credentials: "include",
+    });
+    if (res.ok) setGravacaoVinculada(await res.json());
+    setTranscricaoAberta(true);
   }
 
   function abrirBloqueio(horaLabel: string) {
@@ -639,6 +680,36 @@ export function AgendaList({
             />
           </div>
 
+          {sessaoEditando && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={abrirBuscaPlaud}
+                className="flex w-fit items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-[13px] font-semibold text-muted hover:bg-accent-soft hover:text-fg"
+              >
+                <Mic className="h-3.5 w-3.5" strokeWidth={2} />
+                Vincular gravação Plaud
+              </button>
+
+              {sessaoEditando.plaud_gravacao_id && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={carregarTranscricao}
+                    className="text-[13px] font-semibold text-accent-dark hover:underline"
+                  >
+                    {transcricaoAberta ? "Ocultar transcrição (Plaud)" : "Ver transcrição completa (Plaud)"}
+                  </button>
+                  {transcricaoAberta && gravacaoVinculada && (
+                    <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-[var(--color-accent-soft)] p-3 text-[13px] text-muted">
+                      {gravacaoVinculada.transcricao || "Sem transcrição disponível pra essa gravação."}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {erro && <p className="text-[13px] font-semibold text-red-600">{erro}</p>}
 
           <div className="flex items-center justify-between gap-4 pt-1">
@@ -760,6 +831,33 @@ export function AgendaList({
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal open={modalPlaudAberto} onClose={() => setModalPlaudAberto(false)} title="Vincular gravação Plaud">
+        {gravacoesDisponiveis.length === 0 ? (
+          <p className="text-[13.5px] text-muted">
+            Nenhuma gravação disponível ainda. Configure o Zap no Zapier (Configurações → Plaud) e grave
+            uma consulta pela Plaud pra ela aparecer aqui.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {gravacoesDisponiveis.map((g) => (
+              <li key={g.id}>
+                <button
+                  type="button"
+                  onClick={() => vincularPlaud(g.id)}
+                  disabled={vinculandoGravacao}
+                  className="w-full rounded-xl border border-border p-3 text-left text-[13.5px] hover:bg-accent-soft disabled:opacity-60"
+                >
+                  <div className="font-bold">
+                    {g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em)}
+                  </div>
+                  <div className="mt-1 truncate text-muted">{g.resumo || "Sem resumo disponível."}</div>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </Modal>
     </>
