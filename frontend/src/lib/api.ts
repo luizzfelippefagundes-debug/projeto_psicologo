@@ -65,6 +65,7 @@ export type Profissional = {
   nome: string;
   email: string;
   slug: string;
+  plaud_webhook_token: string;
 };
 
 export function getMe() {
@@ -81,6 +82,30 @@ export function getSessoesPeriodo(inicio: string, fim: string) {
 
 export function getBloqueios(inicio: string, fim: string) {
   return apiFetch<Bloqueio[]>(`/bloqueios?inicio=${inicio}&fim=${fim}`);
+}
+
+export type PlaudGravacaoDisponivel = {
+  id: number;
+  resumo: string | null;
+  gravado_em: string | null;
+  recebido_em: string;
+};
+
+export type PlaudGravacaoDetalhe = {
+  id: number;
+  sessao_id: number | null;
+  transcricao: string | null;
+  resumo: string | null;
+  gravado_em: string | null;
+  recebido_em: string;
+};
+
+export function getGravacoesPlaudDisponiveis() {
+  return apiFetch<PlaudGravacaoDisponivel[]>("/plaud/gravacoes-disponiveis");
+}
+
+export function getGravacaoPlaud(id: number) {
+  return apiFetch<PlaudGravacaoDetalhe>(`/plaud/gravacoes/${id}`);
 }
 
 export function getRegrasHorario() {

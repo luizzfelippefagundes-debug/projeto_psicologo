@@ -78,6 +78,7 @@ export type SessaoPeriodo = {
   paciente_nome: string;
   local_id: number;
   local_nome: string;
+  plaud_gravacao_id: number | null;
 };
 
 export type Bloqueio = {
