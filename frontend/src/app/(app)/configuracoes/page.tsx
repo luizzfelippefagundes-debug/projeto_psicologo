@@ -4,6 +4,7 @@ import { LocaisList } from "@/components/LocaisList";
 import { RegrasHorarioManager } from "@/components/RegrasHorarioManager";
 import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
 import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
+import { PlaudConexao } from "@/components/PlaudConexao";
 import { getGoogleStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
@@ -44,6 +45,15 @@ export default async function ConfiguracoesPage() {
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
         <h2 className="mb-4 text-[16px] font-bold">Google Calendar</h2>
         <GoogleCalendarConexao conectado={googleStatus.conectado} />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Plaud</h2>
+        <p className="mb-4 text-[14px] text-muted">
+          Configure um Zap no Zapier pra mandar suas gravações da Plaud direto pra cá — depois você
+          vincula cada gravação à sessão certa na tela de edição da sessão.
+        </p>
+        <PlaudConexao webhookToken={profissional.plaud_webhook_token} />
       </div>
 
       {locais.length === 0 ? (
