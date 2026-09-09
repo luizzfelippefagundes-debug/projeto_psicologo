@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, reservas
+from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, plaud, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,8 @@ async def logout(response: Response):
 async def me(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, nome, email, slug FROM profissionais WHERE id = $1", profissional_id
+            "SELECT id, nome, email, slug, plaud_webhook_token FROM profissionais WHERE id = $1",
+            profissional_id,
         )
     return dict(row)
 
@@ -510,10 +511,12 @@ async def listar_sessoes_periodo(
         rows = await conn.fetch(
             """
             SELECT s.id, s.data_hora, s.duracao_minutos, s.modalidade, s.status, s.observacoes,
-                   s.paciente_id, p.nome AS paciente_nome, l.id AS local_id, l.nome AS local_nome
+                   s.paciente_id, p.nome AS paciente_nome, l.id AS local_id, l.nome AS local_nome,
+                   pg.id AS plaud_gravacao_id
             FROM sessoes s
             JOIN pacientes p ON p.id = s.paciente_id
             JOIN locais l ON l.id = s.local_id
+            LEFT JOIN plaud_gravacoes pg ON pg.sessao_id = s.id
             WHERE s.profissional_id = $1
               AND s.data_hora::date BETWEEN $2::date AND $3::date
               AND s.status NOT IN ('cancelada', 'reservado')
@@ -522,6 +525,37 @@ async def listar_sessoes_periodo(
             profissional_id, inicio, fim,
         )
     return [dict(row) for row in rows]
+
+
+@app.get("/plaud/gravacoes-disponiveis")
+async def listar_gravacoes_disponiveis(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    return await plaud.listar_disponiveis(profissional_id)
+
+
+@app.get("/plaud/gravacoes/{gravacao_id}")
+async def obter_gravacao_plaud(
+    gravacao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    gravacao = await plaud.obter_gravacao(profissional_id, gravacao_id)
+    if gravacao is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    return gravacao
+
+
+class VincularGravacaoBody(BaseModel):
+    sessao_id: int
+
+
+@app.patch("/plaud/gravacoes/{gravacao_id}/vincular")
+async def vincular_gravacao_plaud(
+    gravacao_id: int,
+    body: VincularGravacaoBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    gravacao = await plaud.vincular_a_sessao(profissional_id, gravacao_id, body.sessao_id)
+    if gravacao is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    return {"status": "vinculada"}
 
 
 @app.get("/sessoes/dias")
@@ -1025,6 +1059,20 @@ async def responder_anamnese_publica(token: str, body: AnamneseRespostaBody):
             json.dumps(body.respostas), token,
         )
     return {"ok": True}
+
+
+@app.post("/plaud/webhook/{token}")
+async def receber_webhook_plaud(token: str, request: Request):
+    async with db.pool.acquire() as conn:
+        profissional_id = await conn.fetchval(
+            "SELECT id FROM profissionais WHERE plaud_webhook_token = $1", token
+        )
+    if profissional_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token inválido")
+
+    payload = await request.json()
+    gravacao_id = await plaud.processar_webhook(profissional_id, payload)
+    return {"status": "recebido", "gravacao_id": gravacao_id}
 
 
 class ChatMensagem(BaseModel):
