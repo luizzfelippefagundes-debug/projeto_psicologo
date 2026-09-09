@@ -350,6 +350,13 @@ export function AgendaList({
     });
     setVinculandoGravacao(false);
     setModalPlaudAberto(false);
+    // Sem isso, sessaoEditando fica com o plaud_gravacao_id antigo até fechar e
+    // reabrir o modal — router.refresh() atualiza a lista por trás, mas não essa
+    // cópia local — e o link "Ver transcrição" simplesmente não aparecia depois de
+    // vincular, sem nenhum aviso de que o vínculo funcionou.
+    setSessaoEditando((atual) => (atual ? { ...atual, plaud_gravacao_id: gravacaoId } : atual));
+    setGravacaoVinculada(null);
+    setTranscricaoAberta(false);
     router.refresh();
   }
 
