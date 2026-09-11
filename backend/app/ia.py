@@ -4,12 +4,28 @@ demanda — gerar um texto curto a partir da transcrição, e tentar identificar
 do paciente nela. Reaproveita a mesma ANTHROPIC_API_KEY e o mesmo modelo já usados
 pelo bot do WhatsApp (app/bot.py)."""
 import json
+import re
 
 import anthropic
 
 from app.config import settings
 
 MODELO = "claude-haiku-4-5"
+
+
+def _extrair_json(texto: str) -> dict | None:
+    """Extrai o primeiro objeto JSON de um texto, mesmo se vier envolto em
+    ```json ... ``` ou com texto antes/depois — confirmado contra uma chamada real
+    que a Claude, apesar da instrução de "responda só com JSON", devolveu o objeto
+    dentro de um bloco de código markdown."""
+    encontrado = re.search(r"\{.*\}", texto, re.DOTALL)
+    if not encontrado:
+        return None
+    try:
+        dados = json.loads(encontrado.group(0))
+    except json.JSONDecodeError:
+        return None
+    return dados if isinstance(dados, dict) else None
 
 
 async def gerar_texto_curto(transcricao: str) -> str:
@@ -58,11 +74,8 @@ async def extrair_dados_paciente(transcricao: str) -> dict:
         messages=[{"role": "user", "content": transcricao}],
     )
     texto = "".join(bloco.text for bloco in resposta.content if bloco.type == "text").strip()
-    try:
-        dados = json.loads(texto)
-    except json.JSONDecodeError:
-        return {"nome": None, "data_nascimento": None}
-    if not isinstance(dados, dict):
+    dados = _extrair_json(texto)
+    if dados is None:
         return {"nome": None, "data_nascimento": None}
     return {
         "nome": dados.get("nome") if isinstance(dados.get("nome"), str) else None,
