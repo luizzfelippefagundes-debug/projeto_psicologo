@@ -77,7 +77,7 @@ async def listar_todas(profissional_id: int) -> list:
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT g.id, g.titulo, g.resumo, g.transcricao, g.gravado_em, g.recebido_em,
+            SELECT g.id, g.titulo, g.resumo, g.texto_curto, g.transcricao, g.gravado_em, g.recebido_em,
                    g.sessao_id, p.nome AS paciente_nome, s.data_hora AS sessao_data_hora
             FROM plaud_gravacoes g
             LEFT JOIN sessoes s ON s.id = g.sessao_id
@@ -99,7 +99,7 @@ async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: i
     async with db.pool.acquire() as conn:
         async with conn.transaction():
             gravacao = await conn.fetchrow(
-                "SELECT id, resumo FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
+                "SELECT id, resumo, texto_curto FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
                 gravacao_id, profissional_id,
             )
             if gravacao is None:
@@ -115,7 +115,10 @@ async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: i
                 sessao_id, gravacao_id,
             )
 
-            if gravacao["resumo"]:
+            # Prefere o texto curto (gerado sob demanda) sobre o resumo estruturado
+            # inteiro — é o que efetivamente vai pras observações da sessão.
+            texto_para_observacoes = gravacao["texto_curto"] or gravacao["resumo"]
+            if texto_para_observacoes:
                 observacoes_atuais = await conn.fetchval(
                     "SELECT observacoes FROM sessoes WHERE id = $1", sessao_id
                 )
@@ -124,8 +127,8 @@ async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: i
                 # por conta própria antes e depois desse bloco.
                 marcador = "\n\n— Resumo automático (Plaud) —\n"
                 texto_base = (observacoes_atuais or "").split(marcador)[0].rstrip()
-                novo_texto = f"{texto_base}{marcador}{gravacao['resumo']}" if texto_base else (
-                    f"— Resumo automático (Plaud) —\n{gravacao['resumo']}"
+                novo_texto = f"{texto_base}{marcador}{texto_para_observacoes}" if texto_base else (
+                    f"— Resumo automático (Plaud) —\n{texto_para_observacoes}"
                 )
                 await conn.execute(
                     "UPDATE sessoes SET observacoes = $1 WHERE id = $2", novo_texto, sessao_id
@@ -137,8 +140,19 @@ async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: i
 async def obter_gravacao(profissional_id: int, gravacao_id: int) -> dict | None:
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, sessao_id, transcricao, resumo, titulo, gravado_em, recebido_em "
+            "SELECT id, sessao_id, transcricao, resumo, texto_curto, titulo, gravado_em, recebido_em "
             "FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
             gravacao_id, profissional_id,
         )
     return dict(row) if row else None
+
+
+async def salvar_texto_curto(profissional_id: int, gravacao_id: int, texto_curto: str) -> bool:
+    """Salva (ou regenera, sobrescrevendo) o texto curto de uma gravação. Retorna
+    False se a gravação não existe/não pertence a essa profissional."""
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "UPDATE plaud_gravacoes SET texto_curto = $1 WHERE id = $2 AND profissional_id = $3",
+            texto_curto, gravacao_id, profissional_id,
+        )
+    return resultado == "UPDATE 1"
