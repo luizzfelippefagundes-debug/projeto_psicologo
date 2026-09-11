@@ -86,6 +86,7 @@ export function getBloqueios(inicio: string, fim: string) {
 
 export type PlaudGravacaoDisponivel = {
   id: number;
+  titulo: string | null;
   resumo: string | null;
   gravado_em: string | null;
   recebido_em: string;
@@ -96,6 +97,7 @@ export type PlaudGravacaoDetalhe = {
   sessao_id: number | null;
   transcricao: string | null;
   resumo: string | null;
+  titulo: string | null;
   gravado_em: string | null;
   recebido_em: string;
 };

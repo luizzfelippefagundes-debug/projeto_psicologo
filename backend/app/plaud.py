@@ -32,20 +32,24 @@ def _extrair_data(payload: dict, *chaves_possiveis: str) -> datetime | None:
 
 async def processar_webhook(profissional_id: int, payload: dict) -> int:
     """Guarda uma gravação recebida via webhook. Sempre guarda payload_bruto
-    inteiro; faz o melhor esforço pra extrair transcrição/resumo/data dos nomes de
-    campo mais prováveis (ajustado depois que virmos um payload real do Zapier)."""
+    inteiro; faz o melhor esforço pra extrair transcrição/resumo/data/título dos
+    nomes de campo mais prováveis. Confirmado contra um payload real da Plaud via
+    Zapier: as chaves reais são "transcript", "summary", "title" e "create_time"
+    (nomes chutados antes de ver um payload real ficam mantidos como fallback, caso
+    ela mapeie os campos diferente em outro Zap)."""
     transcricao = _extrair_campo(payload, "transcript", "transcription", "text")
     resumo = _extrair_campo(payload, "summary", "ai_summary")
-    gravado_em = _extrair_data(payload, "recorded_at", "created_at", "date")
+    titulo = _extrair_campo(payload, "title")
+    gravado_em = _extrair_data(payload, "create_time", "recorded_at", "created_at", "date")
 
     async with db.pool.acquire() as conn:
         gravacao_id = await conn.fetchval(
             """
-            INSERT INTO plaud_gravacoes (profissional_id, transcricao, resumo, gravado_em, payload_bruto)
-            VALUES ($1, $2, $3, $4, $5::jsonb)
+            INSERT INTO plaud_gravacoes (profissional_id, transcricao, resumo, titulo, gravado_em, payload_bruto)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
             RETURNING id
             """,
-            profissional_id, transcricao, resumo, gravado_em, json.dumps(payload),
+            profissional_id, transcricao, resumo, titulo, gravado_em, json.dumps(payload),
         )
     return gravacao_id
 
@@ -56,7 +60,7 @@ async def listar_disponiveis(profissional_id: int) -> list:
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, resumo, gravado_em, recebido_em
+            SELECT id, titulo, resumo, gravado_em, recebido_em
             FROM plaud_gravacoes
             WHERE profissional_id = $1 AND sessao_id IS NULL
             ORDER BY recebido_em DESC
@@ -113,7 +117,7 @@ async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: i
 async def obter_gravacao(profissional_id: int, gravacao_id: int) -> dict | None:
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, sessao_id, transcricao, resumo, gravado_em, recebido_em "
+            "SELECT id, sessao_id, transcricao, resumo, titulo, gravado_em, recebido_em "
             "FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
             gravacao_id, profissional_id,
         )

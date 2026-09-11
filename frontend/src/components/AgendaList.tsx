@@ -857,9 +857,14 @@ export function AgendaList({
                   disabled={vinculandoGravacao}
                   className="w-full rounded-xl border border-border p-3 text-left text-[13.5px] hover:bg-accent-soft disabled:opacity-60"
                 >
-                  <div className="font-bold">
-                    {g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em)}
+                  <div className="truncate font-bold">
+                    {g.titulo || (g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em))}
                   </div>
+                  {g.titulo && (
+                    <div className="text-[12px] text-muted">
+                      {g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em)}
+                    </div>
+                  )}
                   <div className="mt-1 truncate text-muted">{g.resumo || "Sem resumo disponível."}</div>
                 </button>
               </li>
