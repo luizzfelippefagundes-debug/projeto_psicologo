@@ -6,10 +6,21 @@ import type { PlaudGravacaoLista } from "@/lib/api";
 import { formatDataHoraBrasilia } from "@/lib/format";
 import { MarkdownTexto, textoSimples } from "@/components/MarkdownTexto";
 import { TranscricaoChat } from "@/components/TranscricaoChat";
+import { MapaMentalPlaud } from "@/components/MapaMentalPlaud";
 
+const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 const CHAVE_SEM_VINCULO = "__sem_vinculo__";
 
 type Grupo = { chave: string; nome: string; gravacoes: PlaudGravacaoLista[] };
+type Aba = "resumo" | "texto" | "mapa" | "transcricao";
+type DadosPaciente = { nome: string | null; data_nascimento: string | null };
+
+const ABAS: [Aba, string][] = [
+  ["resumo", "Resumo"],
+  ["texto", "Texto pronto"],
+  ["mapa", "Mapa mental"],
+  ["transcricao", "Transcrição"],
+];
 
 function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
   const mapa = new Map<string, Grupo>();
@@ -28,9 +39,98 @@ function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
   );
 }
 
+function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: number; temTranscricao: boolean }) {
+  const [dados, setDados] = useState<DadosPaciente | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function detectar() {
+    setCarregando(true);
+    setErro(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${gravacaoId}/extrair-paciente`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErro(data.detail ?? "Não foi possível analisar agora, tenta de novo.");
+      setCarregando(false);
+      return;
+    }
+    setDados(await res.json());
+    setCarregando(false);
+  }
+
+  if (dados) {
+    if (!dados.nome) {
+      return (
+        <div className="rounded-xl bg-black/5 p-3.5 text-[13.5px] text-muted">
+          Não conseguimos identificar automaticamente.{" "}
+          <a href="/pacientes" className="font-semibold text-accent-dark hover:underline">
+            Cadastrar manualmente
+          </a>
+        </div>
+      );
+    }
+    const params = new URLSearchParams({ prefill_nome: dados.nome });
+    if (dados.data_nascimento) params.set("prefill_nascimento", dados.data_nascimento);
+    return (
+      <div className="rounded-xl bg-accent-soft p-3.5 text-[13.5px]">
+        <p className="font-bold text-fg">
+          {dados.nome}
+          {dados.data_nascimento ? ` · nascido em ${dados.data_nascimento}` : ""}
+        </p>
+        <a
+          href={`/pacientes?${params.toString()}`}
+          className="mt-2 inline-block rounded-xl bg-accent px-3.5 py-2 text-[13px] font-bold text-white hover:bg-accent-dark"
+        >
+          Usar esses dados pra criar cadastro
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={detectar}
+        disabled={carregando || !temTranscricao}
+        className="rounded-xl border border-border px-3.5 py-2 text-[13px] font-bold text-muted hover:bg-accent-soft hover:text-fg disabled:opacity-60"
+      >
+        {carregando ? "Analisando..." : "Detectar dados do paciente"}
+      </button>
+      {erro && <p className="mt-2 text-[13px] font-semibold text-red-600">{erro}</p>}
+    </div>
+  );
+}
+
 function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: boolean; onToggle: () => void }) {
+  const [aba, setAba] = useState<Aba>("resumo");
+  const [textoCurto, setTextoCurto] = useState(g.texto_curto);
+  const [gerando, setGerando] = useState(false);
+  const [erroTexto, setErroTexto] = useState<string | null>(null);
+
   const rotulo =
     g.titulo || (g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em));
+
+  async function gerarTextoCurto() {
+    setGerando(true);
+    setErroTexto(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${g.id}/texto-curto`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErroTexto(data.detail ?? "Não foi possível gerar o texto agora, tenta de novo.");
+      setGerando(false);
+      return;
+    }
+    const data: { texto_curto: string } = await res.json();
+    setTextoCurto(data.texto_curto);
+    setGerando(false);
+  }
 
   return (
     <li className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
@@ -50,19 +150,73 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
 
       {aberto && (
         <div className="border-t border-border p-5 pt-4">
-          <h3 className="mb-2 text-[13px] font-bold">Resumo</h3>
-          {g.resumo ? (
-            <div className="mb-5 border-b border-border pb-5">
-              <MarkdownTexto texto={g.resumo} />
+          <div className="mb-4 flex gap-1.5 overflow-x-auto">
+            {ABAS.map(([valor, label]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setAba(valor)}
+                className={`shrink-0 whitespace-nowrap rounded-xl px-3.5 py-2 text-[13px] font-bold ${
+                  aba === valor ? "bg-accent text-white" : "border border-border bg-card text-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {aba === "resumo" &&
+            (g.resumo ? <MarkdownTexto texto={g.resumo} /> : <p className="text-[13.5px] text-muted">Sem resumo disponível.</p>)}
+
+          {aba === "texto" && (
+            <div>
+              {textoCurto ? (
+                <>
+                  <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">{textoCurto}</p>
+                  <button
+                    type="button"
+                    onClick={gerarTextoCurto}
+                    disabled={gerando}
+                    className="mt-3 text-[13px] font-semibold text-accent-dark hover:underline disabled:opacity-60"
+                  >
+                    {gerando ? "Gerando..." : "Gerar de novo"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={gerarTextoCurto}
+                  disabled={gerando || !g.transcricao}
+                  className="rounded-xl bg-accent px-4 py-2.5 text-[13.5px] font-bold text-white hover:bg-accent-dark disabled:opacity-60"
+                >
+                  {gerando ? "Gerando..." : "Gerar texto pronto"}
+                </button>
+              )}
+              {!g.transcricao && !textoCurto && (
+                <p className="mt-2 text-[12.5px] text-muted">Essa gravação ainda não tem transcrição.</p>
+              )}
+              {erroTexto && <p className="mt-2 text-[13px] font-semibold text-red-600">{erroTexto}</p>}
             </div>
-          ) : (
-            <p className="mb-5 border-b border-border pb-5 text-[13.5px] text-muted">Sem resumo disponível.</p>
           )}
-          <h3 className="mb-2 text-[13px] font-bold">Transcrição completa</h3>
-          {g.transcricao ? (
-            <TranscricaoChat texto={g.transcricao} />
-          ) : (
-            <p className="text-[13.5px] text-muted">Sem transcrição disponível.</p>
+
+          {aba === "mapa" &&
+            (g.resumo ? (
+              <MapaMentalPlaud texto={g.resumo} />
+            ) : (
+              <p className="text-[13.5px] text-muted">Sem resumo disponível pra desenhar o mapa mental.</p>
+            ))}
+
+          {aba === "transcricao" &&
+            (g.transcricao ? (
+              <TranscricaoChat texto={g.transcricao} />
+            ) : (
+              <p className="text-[13.5px] text-muted">Sem transcrição disponível.</p>
+            ))}
+
+          {!g.sessao_id && (
+            <div className="mt-5 border-t border-border pt-4">
+              <AcaoDetectarPaciente gravacaoId={g.id} temTranscricao={!!g.transcricao} />
+            </div>
           )}
         </div>
       )}
