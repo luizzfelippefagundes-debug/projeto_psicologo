@@ -106,6 +106,7 @@ export type PlaudGravacaoLista = {
   id: number;
   titulo: string | null;
   resumo: string | null;
+  texto_curto: string | null;
   transcricao: string | null;
   gravado_em: string | null;
   recebido_em: string;
