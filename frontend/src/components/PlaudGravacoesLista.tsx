@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { PlaudGravacaoLista } from "@/lib/api";
 import { formatDataHoraBrasilia } from "@/lib/format";
 import { MarkdownTexto, textoSimples } from "@/components/MarkdownTexto";
+import { TranscricaoChat } from "@/components/TranscricaoChat";
 
 export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLista[] }) {
   const [expandidoId, setExpandidoId] = useState<number | null>(null);
@@ -69,9 +70,11 @@ export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLis
                   </p>
                 )}
                 <h3 className="mb-2 text-[13px] font-bold">Transcrição completa</h3>
-                <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">
-                  {g.transcricao || "Sem transcrição disponível."}
-                </p>
+                {g.transcricao ? (
+                  <TranscricaoChat texto={g.transcricao} />
+                ) : (
+                  <p className="text-[13.5px] text-muted">Sem transcrição disponível.</p>
+                )}
               </div>
             )}
           </li>

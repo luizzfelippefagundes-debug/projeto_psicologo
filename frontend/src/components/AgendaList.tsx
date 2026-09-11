@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import type { PlaudGravacaoDetalhe, PlaudGravacaoDisponivel } from "@/lib/api";
 import { textoSimples } from "@/components/MarkdownTexto";
+import { TranscricaoChat } from "@/components/TranscricaoChat";
 import {
   formatDataHoraBrasilia,
   formatDiaMesCurto,
@@ -709,9 +710,13 @@ export function AgendaList({
                     {transcricaoAberta ? "Ocultar transcrição (Plaud)" : "Ver transcrição completa (Plaud)"}
                   </button>
                   {transcricaoAberta && gravacaoVinculada && (
-                    <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-[var(--color-accent-soft)] p-3 text-[13px] text-muted">
-                      {gravacaoVinculada.transcricao || "Sem transcrição disponível pra essa gravação."}
-                    </p>
+                    <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-border p-3">
+                      {gravacaoVinculada.transcricao ? (
+                        <TranscricaoChat texto={gravacaoVinculada.transcricao} />
+                      ) : (
+                        <p className="text-[13px] text-muted">Sem transcrição disponível pra essa gravação.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
