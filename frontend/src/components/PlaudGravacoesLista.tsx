@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Folder, FolderOpen } from "lucide-react";
 import type { PlaudGravacaoLista } from "@/lib/api";
 import { formatDataHoraBrasilia } from "@/lib/format";
@@ -106,10 +107,13 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
 }
 
 function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: boolean; onToggle: () => void }) {
+  const router = useRouter();
   const [aba, setAba] = useState<Aba>("resumo");
   const [textoCurto, setTextoCurto] = useState(g.texto_curto);
   const [gerando, setGerando] = useState(false);
   const [erroTexto, setErroTexto] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
   const rotulo =
     g.titulo || (g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em));
@@ -130,6 +134,26 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
     const data: { texto_curto: string } = await res.json();
     setTextoCurto(data.texto_curto);
     setGerando(false);
+  }
+
+  async function excluirGravacao() {
+    const confirmado = confirm(
+      "Excluir essa gravação? Isso não apaga a sessão nem as observações que já foram copiadas pra " +
+        "ela — só remove o registro da gravação em si. Não é possível desfazer."
+    );
+    if (!confirmado) return;
+    setExcluindo(true);
+    setErroExcluir(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${g.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      setErroExcluir("Não foi possível excluir agora, tenta de novo.");
+      setExcluindo(false);
+      return;
+    }
+    router.refresh();
   }
 
   return (
@@ -218,6 +242,18 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
               <AcaoDetectarPaciente gravacaoId={g.id} temTranscricao={!!g.transcricao} />
             </div>
           )}
+
+          <div className="mt-5 border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={excluirGravacao}
+              disabled={excluindo}
+              className="text-[13px] font-semibold text-red-600 hover:underline disabled:opacity-60"
+            >
+              {excluindo ? "Excluindo..." : "Excluir gravação"}
+            </button>
+            {erroExcluir && <p className="mt-2 text-[13px] font-semibold text-red-600">{erroExcluir}</p>}
+          </div>
         </div>
       )}
     </li>

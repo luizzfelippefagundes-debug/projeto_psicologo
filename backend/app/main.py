@@ -563,6 +563,16 @@ async def obter_gravacao_plaud(
     return gravacao
 
 
+@app.delete("/plaud/gravacoes/{gravacao_id}")
+async def excluir_gravacao_plaud(
+    gravacao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    excluida = await plaud.excluir_gravacao(profissional_id, gravacao_id)
+    if not excluida:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    return {"status": "excluida"}
+
+
 class VincularGravacaoBody(BaseModel):
     sessao_id: int
 

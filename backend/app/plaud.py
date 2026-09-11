@@ -147,6 +147,21 @@ async def obter_gravacao(profissional_id: int, gravacao_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+async def excluir_gravacao(profissional_id: int, gravacao_id: int) -> bool:
+    """Apaga uma gravação recebida. Não mexe na sessão vinculada (se houver) nem
+    nas observações que já foram copiadas pra lá — só remove o registro da
+    gravação em si. Pensado pro caso da profissional querer descartar uma
+    gravação que saiu errada e pedir pra Plaud reprocessar/reenviar (o Zap dela
+    dispara de novo em re-transcrição/re-resumo, criando uma entrada nova aqui).
+    Retorna False se a gravação não existe/não pertence a essa profissional."""
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "DELETE FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
+            gravacao_id, profissional_id,
+        )
+    return resultado == "DELETE 1"
+
+
 async def salvar_texto_curto(profissional_id: int, gravacao_id: int, texto_curto: str) -> bool:
     """Salva (ou regenera, sobrescrevendo) o texto curto de uma gravação. Retorna
     False se a gravação não existe/não pertence a essa profissional."""
