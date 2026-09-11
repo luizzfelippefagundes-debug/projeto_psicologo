@@ -9,11 +9,12 @@ import asyncpg
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+import anthropic
 from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, lembretes, notificacoes, plaud, reservas
+from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, ia, lembretes, notificacoes, plaud, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -576,6 +577,58 @@ async def vincular_gravacao_plaud(
     if gravacao is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
     return {"status": "vinculada"}
+
+
+@app.post("/plaud/gravacoes/{gravacao_id}/texto-curto")
+async def gerar_texto_curto_plaud(
+    gravacao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    if not settings.anthropic_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IA ainda não está configurada (falta a chave da API da Anthropic).",
+        )
+    gravacao = await plaud.obter_gravacao(profissional_id, gravacao_id)
+    if gravacao is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    if not gravacao["transcricao"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Essa gravação ainda não tem transcrição"
+        )
+    try:
+        texto_curto = await ia.gerar_texto_curto(gravacao["transcricao"])
+    except anthropic.APIError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível gerar o texto agora, tenta de novo",
+        )
+    await plaud.salvar_texto_curto(profissional_id, gravacao_id, texto_curto)
+    return {"texto_curto": texto_curto}
+
+
+@app.post("/plaud/gravacoes/{gravacao_id}/extrair-paciente")
+async def extrair_dados_paciente_plaud(
+    gravacao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    if not settings.anthropic_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IA ainda não está configurada (falta a chave da API da Anthropic).",
+        )
+    gravacao = await plaud.obter_gravacao(profissional_id, gravacao_id)
+    if gravacao is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    if not gravacao["transcricao"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Essa gravação ainda não tem transcrição"
+        )
+    try:
+        return await ia.extrair_dados_paciente(gravacao["transcricao"])
+    except anthropic.APIError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível analisar agora, tenta de novo",
+        )
 
 
 @app.get("/sessoes/dias")
