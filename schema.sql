@@ -107,6 +107,7 @@ CREATE TABLE plaud_gravacoes (
     sessao_id INTEGER REFERENCES sessoes(id) ON DELETE CASCADE, -- nulo até ser vinculada manualmente
     transcricao TEXT,
     resumo TEXT,
+    texto_curto TEXT, -- resumo curto gerado sob demanda por IA (Claude), a partir da transcrição
     titulo VARCHAR(255), -- título curto da gravação (campo "title" da Plaud), ajuda a reconhecer qual é qual
     gravado_em TIMESTAMPTZ, -- extraído do payload do Zapier quando disponível
     payload_bruto JSONB NOT NULL, -- corpo bruto recebido do Zapier, sempre guardado
