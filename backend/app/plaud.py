@@ -70,6 +70,26 @@ async def listar_disponiveis(profissional_id: int) -> list:
     return [dict(row) for row in rows]
 
 
+async def listar_todas(profissional_id: int) -> list:
+    """Todas as gravações recebidas pra essa profissional, vinculadas ou não, mais
+    recentes primeiro — usado na aba/página que lista tudo, diferente de
+    listar_disponiveis (que é só o que falta vincular, usado no modal da sessão)."""
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT g.id, g.titulo, g.resumo, g.transcricao, g.gravado_em, g.recebido_em,
+                   g.sessao_id, p.nome AS paciente_nome, s.data_hora AS sessao_data_hora
+            FROM plaud_gravacoes g
+            LEFT JOIN sessoes s ON s.id = g.sessao_id
+            LEFT JOIN pacientes p ON p.id = s.paciente_id
+            WHERE g.profissional_id = $1
+            ORDER BY g.recebido_em DESC
+            """,
+            profissional_id,
+        )
+    return [dict(row) for row in rows]
+
+
 async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: int) -> dict | None:
     """Vincula uma gravação a uma sessão e atualiza sessoes.observacoes com o
     resumo — adicionado ao final do que já existir, sem apagar nada. Se a sessão já

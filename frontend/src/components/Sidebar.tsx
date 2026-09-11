@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Brain, Calendar, Home, LogOut, Menu, Settings, Users } from "lucide-react";
+import { Brain, Calendar, Home, LogOut, Menu, Mic, Settings, Users } from "lucide-react";
 import { logout } from "@/lib/auth-client";
 import type { Profissional } from "@/lib/api";
 import { iniciais } from "@/lib/format";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Visão geral", Icon: Home },
   { href: "/pacientes", label: "Pacientes", Icon: Users },
   { href: "/agenda", label: "Agenda", Icon: Calendar },
+  { href: "/plaud", label: "Plaud", Icon: Mic },
   { href: "/configuracoes", label: "Configurações", Icon: Settings },
 ];
 

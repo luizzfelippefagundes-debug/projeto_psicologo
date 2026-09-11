@@ -547,6 +547,11 @@ async def listar_gravacoes_disponiveis(profissional_id: int = Depends(auth.get_c
     return await plaud.listar_disponiveis(profissional_id)
 
 
+@app.get("/plaud/gravacoes")
+async def listar_todas_gravacoes_plaud(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    return await plaud.listar_todas(profissional_id)
+
+
 @app.get("/plaud/gravacoes/{gravacao_id}")
 async def obter_gravacao_plaud(
     gravacao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)

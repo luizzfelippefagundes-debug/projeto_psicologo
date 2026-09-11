@@ -102,8 +102,24 @@ export type PlaudGravacaoDetalhe = {
   recebido_em: string;
 };
 
+export type PlaudGravacaoLista = {
+  id: number;
+  titulo: string | null;
+  resumo: string | null;
+  transcricao: string | null;
+  gravado_em: string | null;
+  recebido_em: string;
+  sessao_id: number | null;
+  paciente_nome: string | null;
+  sessao_data_hora: string | null;
+};
+
 export function getGravacoesPlaudDisponiveis() {
   return apiFetch<PlaudGravacaoDisponivel[]>("/plaud/gravacoes-disponiveis");
+}
+
+export function getGravacoesPlaud() {
+  return apiFetch<PlaudGravacaoLista[]>("/plaud/gravacoes");
 }
 
 export function getGravacaoPlaud(id: number) {
