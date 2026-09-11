@@ -19,10 +19,8 @@ function parsearTranscricao(texto: string): Fala[] | null {
   return falas.length > 0 ? falas : null;
 }
 
-const ESTILOS_BOLHA = [
-  "items-start bg-accent-soft text-fg",
-  "items-end ml-auto bg-card border border-border text-fg",
-];
+const ESTILO_PACIENTE = "items-start bg-accent-soft text-fg";
+const ESTILO_PSICOLOGA = "items-end ml-auto bg-card border border-border text-fg";
 
 export function TranscricaoChat({ texto }: { texto: string }) {
   const falas = parsearTranscricao(texto);
@@ -31,19 +29,21 @@ export function TranscricaoChat({ texto }: { texto: string }) {
     return <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">{texto}</p>;
   }
 
-  const ordem: string[] = [];
-  for (const fala of falas) {
-    if (!ordem.includes(fala.speaker)) ordem.push(fala.speaker);
-  }
+  const speakers = [...new Set(falas.map((f) => f.speaker))];
+  // Nas gravações dela, com só 2 pessoas na conversa, quem fala como "Speaker 2" é
+  // sempre a psicóloga (ela entra depois de cumprimentar quem chegou).
+  const duasPessoas = speakers.length === 2;
 
   return (
     <div className="flex flex-col gap-3">
       {falas.map((fala, i) => {
-        const indice = ordem.indexOf(fala.speaker) % ESTILOS_BOLHA.length;
+        const ehPsicologa = duasPessoas && fala.speaker === "2";
+        const rotulo = duasPessoas ? (ehPsicologa ? "Psicóloga" : "Paciente") : `Pessoa ${fala.speaker}`;
+        const estilo = duasPessoas ? (ehPsicologa ? ESTILO_PSICOLOGA : ESTILO_PACIENTE) : ESTILO_PACIENTE;
         return (
-          <div key={i} className={`flex max-w-[85%] flex-col gap-1 ${ESTILOS_BOLHA[indice]} rounded-2xl px-4 py-2.5`}>
+          <div key={i} className={`flex max-w-[85%] flex-col gap-1 ${estilo} rounded-2xl px-4 py-2.5`}>
             <div className="flex items-baseline gap-2 text-[11.5px] font-bold text-muted">
-              <span>Pessoa {fala.speaker}</span>
+              <span>{rotulo}</span>
               <span className="font-normal opacity-70">{fala.tempo}</span>
             </div>
             <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">{fala.texto}</p>
