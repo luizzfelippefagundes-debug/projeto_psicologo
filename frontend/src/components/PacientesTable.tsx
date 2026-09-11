@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Pencil, Search } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
@@ -433,11 +433,13 @@ export function PacientesTable({
   contatos,
   anamneses,
   abaAtiva,
+  prefillNovoPaciente,
 }: {
   pacientes: Paciente[];
   contatos: ContatoBot[];
   anamneses: AnamneseListaItem[];
   abaAtiva: "pacientes" | "contatos" | "anamneses";
+  prefillNovoPaciente?: { nome?: string; dataNascimento?: string };
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -447,7 +449,16 @@ export function PacientesTable({
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  function abrirCriacao(prefill?: { nome: string; telefone: string }) {
+  useEffect(() => {
+    if (prefillNovoPaciente) {
+      abrirCriacao(prefillNovoPaciente);
+    }
+    // roda só uma vez, no carregamento — abrirCriacao muda a cada render mas não
+    // precisa disparar o efeito de novo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function abrirCriacao(prefill?: { nome?: string; telefone?: string; dataNascimento?: string }) {
     setPacienteEditando(null);
     setForm(prefill ? { ...formStateVazio(), ...prefill } : formStateVazio());
     setErro(null);

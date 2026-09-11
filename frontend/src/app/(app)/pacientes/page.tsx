@@ -5,10 +5,13 @@ import { getContatosBot, getPacientes, getPacientesAnamnese } from "@/lib/api";
 export default async function PacientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string }>;
+  searchParams: Promise<{ aba?: string; prefill_nome?: string; prefill_nascimento?: string }>;
 }) {
-  const { aba } = await searchParams;
+  const { aba, prefill_nome, prefill_nascimento } = await searchParams;
   const abaAtiva = aba === "contatos" ? "contatos" : aba === "anamneses" ? "anamneses" : "pacientes";
+  const prefillNovoPaciente = prefill_nome
+    ? { nome: prefill_nome, dataNascimento: prefill_nascimento }
+    : undefined;
 
   const [pacientes, contatos, anamneses] = await Promise.all([
     getPacientes(),
@@ -33,6 +36,7 @@ export default async function PacientesPage({
         contatos={contatos}
         anamneses={anamneses}
         abaAtiva={abaAtiva}
+        prefillNovoPaciente={prefillNovoPaciente}
       />
     </div>
   );
