@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PlaudGravacaoLista } from "@/lib/api";
 import { formatDataHoraBrasilia } from "@/lib/format";
+import { MarkdownTexto, textoSimples } from "@/components/MarkdownTexto";
 
 export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLista[] }) {
   const [expandidoId, setExpandidoId] = useState<number | null>(null);
@@ -42,7 +43,7 @@ export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLis
                 </div>
                 {!aberto && (
                   <div className="mt-2 truncate text-[13.5px] text-muted">
-                    {g.resumo || "Sem resumo disponível."}
+                    {g.resumo ? textoSimples(g.resumo) : "Sem resumo disponível."}
                   </div>
                 )}
               </div>
@@ -57,12 +58,18 @@ export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLis
 
             {aberto && (
               <div className="border-t border-border p-5 pt-4">
-                <h3 className="mb-1.5 text-[13px] font-bold">Resumo</h3>
-                <p className="mb-4 whitespace-pre-wrap text-[13.5px] text-muted">
-                  {g.resumo || "Sem resumo disponível."}
-                </p>
-                <h3 className="mb-1.5 text-[13px] font-bold">Transcrição completa</h3>
-                <p className="whitespace-pre-wrap text-[13.5px] text-muted">
+                <h3 className="mb-2 text-[13px] font-bold">Resumo</h3>
+                {g.resumo ? (
+                  <div className="mb-5 border-b border-border pb-5">
+                    <MarkdownTexto texto={g.resumo} />
+                  </div>
+                ) : (
+                  <p className="mb-5 border-b border-border pb-5 text-[13.5px] text-muted">
+                    Sem resumo disponível.
+                  </p>
+                )}
+                <h3 className="mb-2 text-[13px] font-bold">Transcrição completa</h3>
+                <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">
                   {g.transcricao || "Sem transcrição disponível."}
                 </p>
               </div>

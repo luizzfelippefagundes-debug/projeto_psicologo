@@ -6,6 +6,7 @@ import { Lock, LockOpen, Mic, Pencil, Plus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import type { PlaudGravacaoDetalhe, PlaudGravacaoDisponivel } from "@/lib/api";
+import { textoSimples } from "@/components/MarkdownTexto";
 import {
   formatDataHoraBrasilia,
   formatDiaMesCurto,
@@ -865,7 +866,9 @@ export function AgendaList({
                       {g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em)}
                     </div>
                   )}
-                  <div className="mt-1 truncate text-muted">{g.resumo || "Sem resumo disponível."}</div>
+                  <div className="mt-1 truncate text-muted">
+                    {g.resumo ? textoSimples(g.resumo) : "Sem resumo disponível."}
+                  </div>
                 </button>
               </li>
             ))}
