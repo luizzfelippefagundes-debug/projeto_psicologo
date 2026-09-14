@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Select } from "@/components/Select";
 import { DIAS_SEMANA, formatHoraCurta, type Local, type RegraHorario } from "@/lib/format";
 
@@ -64,6 +64,8 @@ export function RegrasHorarioManager({
   const [horaFim, setHoraFim] = useState("18:00");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [editandoIds, setEditandoIds] = useState<number[] | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   function alternarDia(dia: number) {
     setDiasSelecionados((atual) =>
@@ -82,6 +84,17 @@ export function RegrasHorarioManager({
 
     setCarregando(true);
 
+    // Editar é implementado como excluir o horário antigo e criar o novo — o
+    // backend não tem um PATCH pra "mover" um grupo de regras pra outros dias/horas,
+    // então junta as duas ações que já existem numa única operação pra ela.
+    if (editandoIds) {
+      await Promise.all(
+        editandoIds.map((id) =>
+          fetch(`${API_URL}/regras-horario/${id}`, { method: "DELETE", credentials: "include" })
+        )
+      );
+    }
+
     const res = await fetch(`${API_URL}/regras-horario`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -96,12 +109,13 @@ export function RegrasHorarioManager({
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setErro(data.detail ?? "Não deu pra criar a regra.");
+      setErro(data.detail ?? (editandoIds ? "Não deu pra salvar as alterações." : "Não deu pra criar a regra."));
       setCarregando(false);
       return;
     }
 
     setDiasSelecionados([]);
+    setEditandoIds(null);
     setCarregando(false);
     router.refresh();
   }
@@ -115,6 +129,22 @@ export function RegrasHorarioManager({
     router.refresh();
   }
 
+  function handleEditar(localIdDoGrupo: number, grupo: { horaInicio: string; horaFim: string; regras: RegraHorario[] }) {
+    setLocalId(String(localIdDoGrupo));
+    setDiasSelecionados([...new Set(grupo.regras.map((r) => r.dia_semana))].sort());
+    setHoraInicio(grupo.horaInicio);
+    setHoraFim(grupo.horaFim);
+    setEditandoIds(grupo.regras.map((r) => r.id));
+    setErro(null);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function cancelarEdicao() {
+    setEditandoIds(null);
+    setDiasSelecionados([]);
+    setErro(null);
+  }
+
   const regrasPorLocal = locais.map((local) => ({
     local,
     regras: regras.filter((r) => r.local_id === local.id),
@@ -123,6 +153,7 @@ export function RegrasHorarioManager({
   return (
     <div className="flex flex-col gap-6">
       <form
+        ref={formRef}
         onSubmit={handleSubmit}
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]"
       >
@@ -213,17 +244,33 @@ export function RegrasHorarioManager({
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={carregando || !localId || diasSelecionados.length === 0}
-          className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
-        >
-          {carregando
-            ? "Adicionando..."
-            : diasSelecionados.length > 1
-              ? `Adicionar horário (${diasSelecionados.length} dias)`
-              : "Adicionar horário"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={carregando || !localId || diasSelecionados.length === 0}
+            className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
+          >
+            {carregando
+              ? editandoIds
+                ? "Salvando..."
+                : "Adicionando..."
+              : editandoIds
+                ? "Salvar alterações"
+                : diasSelecionados.length > 1
+                  ? `Adicionar horário (${diasSelecionados.length} dias)`
+                  : "Adicionar horário"}
+          </button>
+          {editandoIds && (
+            <button
+              type="button"
+              onClick={cancelarEdicao}
+              disabled={carregando}
+              className="text-[13.5px] font-semibold text-muted hover:underline disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
 
         {erro && <p className="w-full text-[13px] font-semibold text-red-600">{erro}</p>}
       </form>
@@ -248,13 +295,22 @@ export function RegrasHorarioManager({
                       {formatarDias(grupo.regras)} · {formatHoraCurta(grupo.horaInicio)} –{" "}
                       {formatHoraCurta(grupo.horaFim)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemover(grupo.regras.map((r) => r.id))}
-                      className="text-[13px] font-semibold text-red-600 hover:underline"
-                    >
-                      Remover
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleEditar(local.id, grupo)}
+                        className="text-[13px] font-semibold text-accent-dark hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemover(grupo.regras.map((r) => r.id))}
+                        className="text-[13px] font-semibold text-red-600 hover:underline"
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
