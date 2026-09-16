@@ -135,6 +135,10 @@ export function getGoogleStatus() {
   return apiFetch<{ conectado: boolean }>("/google/status");
 }
 
+export function getIcloudStatus() {
+  return apiFetch<{ conectado: boolean }>("/icloud/status");
+}
+
 export function getConversasEscalonadas() {
   return apiFetch<ConversaEscalonada[]>("/conversas-escalonadas?apenas_pendentes=true");
 }

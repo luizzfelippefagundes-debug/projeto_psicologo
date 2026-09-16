@@ -3,15 +3,17 @@ import { NovoLocalForm } from "@/components/NovoLocalForm";
 import { LocaisList } from "@/components/LocaisList";
 import { RegrasHorarioManager } from "@/components/RegrasHorarioManager";
 import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
+import { IcloudCalendarConexao } from "@/components/IcloudCalendarConexao";
 import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
 import { PlaudConexao } from "@/components/PlaudConexao";
-import { getGoogleStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
+import { getGoogleStatus, getIcloudStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
-  const [locais, regras, googleStatus, profissional] = await Promise.all([
+  const [locais, regras, googleStatus, icloudStatus, profissional] = await Promise.all([
     getLocais(),
     getRegrasHorario(),
     getGoogleStatus(),
+    getIcloudStatus(),
     getMe(),
   ]);
 
@@ -45,6 +47,11 @@ export default async function ConfiguracoesPage() {
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
         <h2 className="mb-4 text-[16px] font-bold">Google Calendar</h2>
         <GoogleCalendarConexao conectado={googleStatus.conectado} />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Calendário Apple (iCloud)</h2>
+        <IcloudCalendarConexao conectado={icloudStatus.conectado} />
       </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
