@@ -235,6 +235,10 @@ export function RegrasHorarioManager({
 
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-[13px] text-muted">
+        Pode adicionar mais de um horário pro mesmo dia — por exemplo, manhã e tarde separados, com um
+        intervalo no meio. É só preencher o formulário de novo com o mesmo dia e um horário diferente.
+      </p>
       <form
         onSubmit={handleSubmit}
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-5 shadow-[0_8px_24px_var(--color-shadow)]"
