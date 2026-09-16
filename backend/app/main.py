@@ -14,7 +14,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, ia, lembretes, notificacoes, plaud, reservas
+from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, ia, icloud_calendar, lembretes, notificacoes, plaud, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -26,10 +26,12 @@ async def lifespan(app: FastAPI):
     tarefa_lembretes = asyncio.create_task(lembretes.loop_lembretes())
     tarefa_holds = asyncio.create_task(reservas.loop_expiracao_holds())
     tarefa_google_sync = asyncio.create_task(google_calendar.loop_sincronizacao())
+    tarefa_icloud_sync = asyncio.create_task(icloud_calendar.loop_sincronizacao())
     yield
     tarefa_lembretes.cancel()
     tarefa_holds.cancel()
     tarefa_google_sync.cancel()
+    tarefa_icloud_sync.cancel()
     await db.disconnect()
 
 
@@ -1423,6 +1425,43 @@ async def google_status(profissional_id: int = Depends(auth.get_current_profissi
 @app.post("/google/sincronizar")
 async def google_sincronizar(profissional_id: int = Depends(auth.get_current_profissional_id)):
     return await google_calendar.puxar_eventos_do_google(profissional_id)
+
+
+class IcloudConectarBody(BaseModel):
+    apple_id: str
+    senha_app: str
+
+
+@app.post("/icloud/conectar")
+async def icloud_conectar(
+    body: IcloudConectarBody, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    try:
+        calendar_url = await icloud_calendar.testar_conexao(body.apple_id, body.senha_app)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não foi possível conectar — confira o Apple ID e a senha de app.",
+        )
+    await icloud_calendar.salvar_conexao(profissional_id, body.apple_id, body.senha_app, calendar_url)
+    return {"status": "conectado"}
+
+
+@app.get("/icloud/status")
+async def icloud_status(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    conexao = await icloud_calendar.obter_conexao(profissional_id)
+    return {"conectado": conexao is not None}
+
+
+@app.post("/icloud/sincronizar")
+async def icloud_sincronizar(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    return await icloud_calendar.puxar_eventos_do_icloud(profissional_id)
+
+
+@app.delete("/icloud/desconectar")
+async def icloud_desconectar(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    await icloud_calendar.desconectar(profissional_id)
+    return {"status": "desconectado"}
 
 
 @app.get("/conversas-escalonadas")
