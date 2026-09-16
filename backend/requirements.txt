@@ -9,3 +9,4 @@ google-genai
 anthropic
 resend
 httpx
+caldav
