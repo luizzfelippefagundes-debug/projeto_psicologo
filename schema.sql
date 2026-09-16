@@ -151,8 +151,19 @@ CREATE TABLE bloqueios_horario (
     data_fim TIMESTAMPTZ NOT NULL,
     motivo VARCHAR(255),
     google_event_id VARCHAR(255), -- id do evento de origem no Google Calendar (quando veio de lá)
+    icloud_event_uid VARCHAR(255), -- uid do evento de origem no Calendário iCloud (quando veio de lá)
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (profissional_id, google_event_id)
+    UNIQUE (profissional_id, google_event_id),
+    UNIQUE (profissional_id, icloud_event_uid)
+);
+
+CREATE TABLE icloud_conexoes (
+    profissional_id INTEGER PRIMARY KEY REFERENCES profissionais(id) ON DELETE CASCADE,
+    apple_id VARCHAR(255) NOT NULL,
+    senha_app TEXT NOT NULL, -- "senha de app" gerada em appleid.apple.com, nunca a senha normal da conta
+    calendar_url TEXT, -- URL do calendário principal, descoberta e cacheada na primeira conexão
+    sync_token TEXT, -- reservado pra sincronização incremental futura; não usado nessa fase
+    conectado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE google_conexoes (
