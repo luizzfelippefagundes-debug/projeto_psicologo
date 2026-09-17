@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import { DIAS_SEMANA, formatHoraCurta, type Local, type RegraHorario } from "@/lib/format";
@@ -53,6 +54,13 @@ const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão n
 
 type EdicaoState = {
   ids: number[];
+  localId: string;
+  dias: number[];
+  horaInicio: string;
+  horaFim: string;
+};
+
+type AdicionarState = {
   localId: string;
   dias: number[];
   horaInicio: string;
@@ -128,6 +136,10 @@ export function RegrasHorarioManager({
   const [edicao, setEdicao] = useState<EdicaoState | null>(null);
   const [erroEdicao, setErroEdicao] = useState<string | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  const [adicionar, setAdicionar] = useState<AdicionarState | null>(null);
+  const [erroAdicionar, setErroAdicionar] = useState<string | null>(null);
+  const [salvandoAdicionar, setSalvandoAdicionar] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -228,6 +240,52 @@ export function RegrasHorarioManager({
     router.refresh();
   }
 
+  function abrirAdicionar(localIdDoGrupo: number, grupo: { regras: RegraHorario[] }) {
+    setAdicionar({
+      localId: String(localIdDoGrupo),
+      dias: [...new Set(grupo.regras.map((r) => r.dia_semana))].sort(),
+      horaInicio: "08:00",
+      horaFim: "18:00",
+    });
+    setErroAdicionar(null);
+  }
+
+  async function handleSalvarAdicionar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!adicionar) return;
+    setErroAdicionar(null);
+
+    if (adicionar.dias.length === 0) {
+      setErroAdicionar("Selecione ao menos um dia.");
+      return;
+    }
+
+    setSalvandoAdicionar(true);
+
+    const res = await fetch(`${API_URL}/regras-horario`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        local_id: Number(adicionar.localId),
+        dias_semana: adicionar.dias,
+        hora_inicio: adicionar.horaInicio,
+        hora_fim: adicionar.horaFim,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setErroAdicionar(data.detail ?? "Não deu pra adicionar o horário.");
+      setSalvandoAdicionar(false);
+      return;
+    }
+
+    setSalvandoAdicionar(false);
+    setAdicionar(null);
+    router.refresh();
+  }
+
   const regrasPorLocal = locais.map((local) => ({
     local,
     regras: regras.filter((r) => r.local_id === local.id),
@@ -321,6 +379,15 @@ export function RegrasHorarioManager({
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
+                        onClick={() => abrirAdicionar(local.id, grupo)}
+                        aria-label="Adicionar outro horário nesse(s) dia(s)"
+                        title="Adicionar outro horário nesse(s) dia(s)"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-accent-dark hover:bg-accent/10"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => abrirEdicao(local.id, grupo)}
                         className="text-[13px] font-semibold text-accent-dark hover:underline"
                       >
@@ -394,6 +461,63 @@ export function RegrasHorarioManager({
               className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
             >
               {salvandoEdicao ? "Salvando..." : "Salvar alterações"}
+            </button>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={adicionar !== null} onClose={() => setAdicionar(null)} title="Adicionar horário">
+        {adicionar && (
+          <form onSubmit={handleSalvarAdicionar} className="flex flex-col gap-4">
+            <div className="flex flex-col">
+              <label htmlFor="adicionar-local" className="mb-1.5 text-sm font-semibold">
+                Local
+              </label>
+              <Select
+                id="adicionar-local"
+                value={adicionar.localId}
+                onChange={(value) => setAdicionar({ ...adicionar, localId: value })}
+                options={locais.map((local) => ({ value: String(local.id), label: local.nome }))}
+              />
+            </div>
+
+            <DiasSemanaSeletor dias={adicionar.dias} onChange={(dias) => setAdicionar({ ...adicionar, dias })} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col">
+                <label htmlFor="adicionar-inicio" className="mb-1.5 text-sm font-semibold">
+                  Início
+                </label>
+                <input
+                  id="adicionar-inicio"
+                  type="time"
+                  value={adicionar.horaInicio}
+                  onChange={(e) => setAdicionar({ ...adicionar, horaInicio: e.target.value })}
+                  className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label htmlFor="adicionar-fim" className="mb-1.5 text-sm font-semibold">
+                  Fim
+                </label>
+                <input
+                  id="adicionar-fim"
+                  type="time"
+                  value={adicionar.horaFim}
+                  onChange={(e) => setAdicionar({ ...adicionar, horaFim: e.target.value })}
+                  className="rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 text-[14.5px] outline-none focus:border-accent"
+                />
+              </div>
+            </div>
+
+            {erroAdicionar && <p className="text-[13px] font-semibold text-red-600">{erroAdicionar}</p>}
+
+            <button
+              type="submit"
+              disabled={salvandoAdicionar}
+              className="rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
+            >
+              {salvandoAdicionar ? "Adicionando..." : "Adicionar horário"}
             </button>
           </form>
         )}
