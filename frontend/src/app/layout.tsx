@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#a8768a",
+  themeColor: "#18181b",
 };
 
 const themeInitScript = `
@@ -60,19 +60,19 @@ export default function RootLayout({
           localization={ptBR}
           appearance={{
             variables: {
-              colorPrimary: "#a8768a",
+              colorPrimary: "#27272a",
               colorBackground: "#ffffff",
-              colorForeground: "#3a2f2f",
-              colorMutedForeground: "#8a7873",
+              colorForeground: "#18181b",
+              colorMutedForeground: "#71717a",
               colorInput: "#ffffff",
-              colorInputForeground: "#3a2f2f",
-              colorBorder: "#ddd0c9",
+              colorInputForeground: "#18181b",
+              colorBorder: "#e4e4e7",
               colorDanger: "#dc2626",
               borderRadius: "14px",
               fontFamily: "var(--font-inter), sans-serif",
             },
             elements: {
-              card: "border border-[#ddd0c9] shadow-md",
+              card: "border border-[#e4e4e7] shadow-md",
               headerTitle: "hidden",
               headerSubtitle: "hidden",
             },

@@ -3,20 +3,20 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --color-accent: #a8768a;
-  --color-accent-dark: #8f5f73;
-  --color-accent-soft: #f3e8ec;
-  --color-bg: #ede6e1;
-  --color-bg-grad-start: #f0e9e4;
-  --color-bg-grad-end: #e3d9d3;
-  --color-card: #faf6f3;
-  --color-sidebar: #faf6f3;
-  --color-fg: #3a2f2f;
-  --color-muted: #8a7873;
-  --color-border: #ddd0c9;
+  --color-accent: #27272a;
+  --color-accent-dark: #000000;
+  --color-accent-soft: #f2f2f3;
+  --color-bg: #f2f2f2;
+  --color-bg-grad-start: #fafafa;
+  --color-bg-grad-end: #ececec;
+  --color-card: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-fg: #18181b;
+  --color-muted: #71717a;
+  --color-border: #e4e4e7;
   --color-gold: #b8860b;
   --color-gold-soft: #f5ecd6;
-  --color-shadow: rgba(90, 60, 60, 0.14);
+  --color-shadow: rgba(0, 0, 0, 0.1);
 
   /* Chart palette — validated with scripts/validate_palette.js against --color-card (light) */
   --chart-blue: #2a78d6;
