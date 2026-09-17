@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Brain, Calendar, Home, LogOut, Menu, Mic, Settings, Users } from "lucide-react";
+import { Calendar, Home, LogOut, Menu, Mic, Settings, Users } from "lucide-react";
 import { logout } from "@/lib/auth-client";
 import type { Profissional } from "@/lib/api";
 import { iniciais } from "@/lib/format";
@@ -34,11 +34,13 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-2.5 text-[17px] font-extrabold text-fg">
-          <span className="flex h-8.5 w-8.5 items-center justify-center rounded-[10px] bg-accent text-white">
-            <Brain className="h-4.5 w-4.5" strokeWidth={2.25} />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-accent text-[12.5px] font-extrabold text-white">
+            {iniciais(profissional.nome)}
           </span>
-          Consultório Psicologia
+          <span className="truncate text-[17px] font-extrabold text-fg" title={profissional.nome}>
+            {profissional.nome}
+          </span>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
@@ -96,11 +98,13 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
       )}
 
       <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-[var(--color-bg)] px-4 md:hidden">
-        <div className="flex items-center gap-2 text-[15.5px] font-extrabold text-fg">
-          <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-white">
-            <Brain className="h-3.5 w-3.5" strokeWidth={2.25} />
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-extrabold text-white">
+            {iniciais(profissional.nome)}
           </span>
-          Consultório Psicologia
+          <span className="truncate text-[15.5px] font-extrabold text-fg" title={profissional.nome}>
+            {profissional.nome}
+          </span>
         </div>
         <button
           type="button"
