@@ -62,11 +62,11 @@
   --color-border: var(--color-border);
   --color-gold: var(--color-gold);
   --color-gold-soft: var(--color-gold-soft);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-playfair);
 }
 
 body {
   background: linear-gradient(160deg, var(--color-bg-grad-start) 0%, var(--color-bg-grad-end) 100%);
   color: var(--color-fg);
-  font-family: var(--font-sans), sans-serif;
+  font-family: var(--font-sans), serif;
 }

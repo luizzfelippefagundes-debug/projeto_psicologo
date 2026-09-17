@@ -1,12 +1,12 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Playfair_Display } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
@@ -43,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} h-full`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${playfairDisplay.variable} h-full`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
@@ -61,7 +61,7 @@ export default function RootLayout({
               colorBorder: "#ddd0c9",
               colorDanger: "#dc2626",
               borderRadius: "14px",
-              fontFamily: "var(--font-inter), sans-serif",
+              fontFamily: "var(--font-playfair), serif",
             },
             elements: {
               card: "border border-[#ddd0c9] shadow-md",
