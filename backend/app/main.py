@@ -273,14 +273,18 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
     return [dict(row) for row in rows]
 
 
-# se mudar/remover 'reabilitacao_com_estimulacao' ou 'neuromodulacao' aqui, atualiza
-# também anamnese.PROCEDIMENTOS_COM_ANAMNESE — não é derivado automaticamente daqui
+# se mudar/remover 'neuromodulacao' aqui, atualiza também
+# anamnese.PROCEDIMENTOS_COM_ANAMNESE — não é derivado automaticamente daqui
 TIPOS_PROCEDIMENTO = (
+    "consulta_psicologica",
     "avaliacao_neuropsicologica",
-    "terapia",
-    "reabilitacao_com_estimulacao",
-    "reabilitacao_sem_estimulacao",
+    "plano_neurodesenvolvimento",
+    "plano_casal",
+    "plano_terapeutico",
     "neuromodulacao",
+    # legado — não oferecido mais como opção nova no cadastro, mas mantido válido
+    # aqui porque pacientes já cadastrados usam esse valor
+    "terapia",
 )
 
 
@@ -1093,11 +1097,13 @@ async def dashboard_analytics(
 
 
 LABELS_PROCEDIMENTO = {
-    "avaliacao_neuropsicologica": "Avaliação neuropsicológica",
-    "terapia": "Terapia",
-    "reabilitacao_com_estimulacao": "Reabilitação com estimulação transcraniana",
-    "reabilitacao_sem_estimulacao": "Reabilitação sem estimulação transcraniana",
+    "consulta_psicologica": "Consulta psicológica",
+    "avaliacao_neuropsicologica": "Avaliação neuropsicológica (5 sessões)",
+    "plano_neurodesenvolvimento": "Plano de acompanhamento - transtornos do neurodesenvolvimento (4 sessões)",
+    "plano_casal": "Plano de acompanhamento para casal (6 sessões individuais)",
+    "plano_terapeutico": "Plano de acompanhamento terapêutico (8 sessões)",
     "neuromodulacao": "Neuromodulação",
+    "terapia": "Terapia",  # legado
 }
 
 

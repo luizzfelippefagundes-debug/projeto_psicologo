@@ -14,15 +14,28 @@ export type Paciente = {
 };
 
 export const PROCEDIMENTOS = [
-  { value: "avaliacao_neuropsicologica", label: "Avaliação neuropsicológica" },
-  { value: "terapia", label: "Terapia" },
-  { value: "reabilitacao_com_estimulacao", label: "Reabilitação com estimulação transcraniana" },
-  { value: "reabilitacao_sem_estimulacao", label: "Reabilitação sem estimulação transcraniana" },
+  { value: "consulta_psicologica", label: "Consulta psicológica" },
+  { value: "avaliacao_neuropsicologica", label: "Avaliação neuropsicológica (5 sessões)" },
+  {
+    value: "plano_neurodesenvolvimento",
+    label: "Plano de acompanhamento - transtornos do neurodesenvolvimento (4 sessões)",
+  },
+  { value: "plano_casal", label: "Plano de acompanhamento para casal (6 sessões individuais)" },
+  { value: "plano_terapeutico", label: "Plano de acompanhamento terapêutico (8 sessões)" },
   { value: "neuromodulacao", label: "Neuromodulação" },
 ] as const;
 
 export function labelProcedimento(value: string | null): string {
-  return PROCEDIMENTOS.find((p) => p.value === value)?.label ?? "—";
+  const conhecido = PROCEDIMENTOS.find((p) => p.value === value);
+  if (conhecido) return conhecido.label;
+  if (!value) return "—";
+  // Valor legado (ex: "terapia") que não é mais oferecido como opção nova no
+  // cadastro, mas ainda existe em pacientes já cadastrados — mostra algo
+  // legível em vez de "—".
+  return value
+    .split("_")
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1))
+    .join(" ");
 }
 
 export type SessaoHoje = {

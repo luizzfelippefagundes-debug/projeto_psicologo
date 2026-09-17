@@ -7,7 +7,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-PROCEDIMENTOS_COM_ANAMNESE = {"reabilitacao_com_estimulacao", "neuromodulacao"}
+PROCEDIMENTOS_COM_ANAMNESE = {"neuromodulacao"}
 IDADE_CORTE_INFANTIL = 12
 
 
