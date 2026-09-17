@@ -1,14 +1,22 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+// Só usada no nome/logo do sidebar (texto grande) — em tamanho pequeno essa fonte
+// serifada fica difícil de ler, então o corpo do site inteiro usa a Inter.
 const playfairDisplay = Playfair_Display({
   variable: "--font-playfair",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -43,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${playfairDisplay.variable} h-full`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${inter.variable} ${playfairDisplay.variable} h-full`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
@@ -61,7 +69,7 @@ export default function RootLayout({
               colorBorder: "#ddd0c9",
               colorDanger: "#dc2626",
               borderRadius: "14px",
-              fontFamily: "var(--font-playfair), serif",
+              fontFamily: "var(--font-inter), sans-serif",
             },
             elements: {
               card: "border border-[#ddd0c9] shadow-md",

@@ -27,20 +27,20 @@
 }
 
 .dark {
-  --color-accent: #d4a3b8;
-  --color-accent-dark: #e0b8c9;
-  --color-accent-soft: #3a2a30;
-  --color-bg: #1c1517;
-  --color-bg-grad-start: #171214;
-  --color-bg-grad-end: #211a1c;
-  --color-card: #251d20;
-  --color-sidebar: #21181b;
-  --color-fg: #f0e6e8;
-  --color-muted: #b3a0a3;
-  --color-border: #3d2e32;
+  --color-accent: #52525b;
+  --color-accent-dark: #d4d4d8;
+  --color-accent-soft: #232323;
+  --color-bg: #0a0a0a;
+  --color-bg-grad-start: #0a0a0a;
+  --color-bg-grad-end: #000000;
+  --color-card: #171717;
+  --color-sidebar: #111111;
+  --color-fg: #f4f4f5;
+  --color-muted: #a1a1aa;
+  --color-border: #292929;
   --color-gold: #f0c766;
-  --color-gold-soft: #3a3120;
-  --color-shadow: rgba(0, 0, 0, 0.4);
+  --color-gold-soft: #2e2a1c;
+  --color-shadow: rgba(0, 0, 0, 0.6);
 
   /* Chart palette — validated with scripts/validate_palette.js against --color-card (dark) */
   --chart-blue: #3987e5;
@@ -62,11 +62,11 @@
   --color-border: var(--color-border);
   --color-gold: var(--color-gold);
   --color-gold-soft: var(--color-gold-soft);
-  --font-sans: var(--font-playfair);
+  --font-sans: var(--font-inter);
 }
 
 body {
   background: linear-gradient(160deg, var(--color-bg-grad-start) 0%, var(--color-bg-grad-end) 100%);
   color: var(--color-fg);
-  font-family: var(--font-sans), serif;
+  font-family: var(--font-sans), sans-serif;
 }

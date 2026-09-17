@@ -34,7 +34,7 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5" style={{ fontFamily: "var(--font-playfair), serif" }}>
           <span className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-accent text-[12.5px] font-extrabold text-white">
             {iniciais(profissional.nome)}
           </span>
@@ -98,7 +98,7 @@ export function Sidebar({ profissional }: { profissional: Profissional }) {
       )}
 
       <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-[var(--color-bg)] px-4 md:hidden">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2" style={{ fontFamily: "var(--font-playfair), serif" }}>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-extrabold text-white">
             {iniciais(profissional.nome)}
           </span>
