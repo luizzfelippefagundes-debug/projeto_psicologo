@@ -32,12 +32,13 @@ function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
     }
     mapa.get(chave)!.gravacoes.push(g);
   }
-  // gravacoes já chega ordenada por mais recente primeiro — preserva essa ordem entre
-  // pastas (paciente com gravação mais recente aparece primeiro), só a pasta "Não
-  // vinculadas" vai sempre pro topo por precisar de ação.
-  return [...mapa.values()].sort((a, b) =>
-    a.chave === CHAVE_SEM_VINCULO ? -1 : b.chave === CHAVE_SEM_VINCULO ? 1 : 0
-  );
+  // Pastas em ordem alfabética pelo nome do paciente, pra achar mais fácil — só a
+  // pasta "Não vinculadas" foge disso e vai sempre pro topo, por precisar de ação.
+  return [...mapa.values()].sort((a, b) => {
+    if (a.chave === CHAVE_SEM_VINCULO) return -1;
+    if (b.chave === CHAVE_SEM_VINCULO) return 1;
+    return a.nome.localeCompare(b.nome, "pt-BR");
+  });
 }
 
 function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: number; temTranscricao: boolean }) {

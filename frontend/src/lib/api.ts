@@ -127,6 +127,22 @@ export function getGravacaoPlaud(id: number) {
   return apiFetch<PlaudGravacaoDetalhe>(`/plaud/gravacoes/${id}`);
 }
 
+export type PlaudGravacaoPaciente = {
+  id: number;
+  titulo: string | null;
+  resumo: string | null;
+  texto_curto: string | null;
+  transcricao: string | null;
+  gravado_em: string | null;
+  recebido_em: string;
+  sessao_id: number;
+  sessao_data_hora: string;
+};
+
+export function getGravacoesPlaudPaciente(pacienteId: number) {
+  return apiFetch<PlaudGravacaoPaciente[]>(`/pacientes/${pacienteId}/gravacoes-plaud`);
+}
+
 export function getRegrasHorario() {
   return apiFetch<RegraHorario[]>("/regras-horario");
 }

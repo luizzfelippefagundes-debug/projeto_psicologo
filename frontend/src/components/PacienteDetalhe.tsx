@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamneseSchema";
+import type { PlaudGravacaoPaciente } from "@/lib/api";
+import { PlaudHistoricoPaciente } from "@/components/PlaudHistoricoPaciente";
 import {
   formatDataHoraBrasilia,
   iniciais,
@@ -11,7 +13,7 @@ import {
   type SessaoHistorico,
 } from "@/lib/format";
 
-const ABAS = ["Visão geral", "Histórico de sessões", "Anamnese"] as const;
+const ABAS = ["Visão geral", "Histórico de sessões", "Plaud", "Anamnese"] as const;
 type Aba = (typeof ABAS)[number];
 
 const STATUS_SESSAO_LABEL: Record<string, string> = {
@@ -26,10 +28,12 @@ export function PacienteDetalhe({
   paciente,
   sessoes,
   anamnese,
+  gravacoesPlaud,
 }: {
   paciente: Paciente;
   sessoes: SessaoHistorico[];
   anamnese: AnamneseDetalhe;
+  gravacoesPlaud: PlaudGravacaoPaciente[];
 }) {
   const [aba, setAba] = useState<Aba>("Visão geral");
 
@@ -150,6 +154,8 @@ export function PacienteDetalhe({
           )}
         </div>
       )}
+
+      {aba === "Plaud" && <PlaudHistoricoPaciente gravacoes={gravacoesPlaud} />}
 
       {aba === "Anamnese" && (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">

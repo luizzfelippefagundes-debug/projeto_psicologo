@@ -90,6 +90,25 @@ async def listar_todas(profissional_id: int) -> list:
     return [dict(row) for row in rows]
 
 
+async def listar_por_paciente(profissional_id: int, paciente_id: int) -> list:
+    """Gravações vinculadas a alguma sessão desse paciente — usado na aba Plaud do
+    perfil do paciente, pra ela ver o histórico de conversas dele sem precisar
+    procurar na lista geral."""
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT g.id, g.titulo, g.resumo, g.texto_curto, g.transcricao, g.gravado_em, g.recebido_em,
+                   g.sessao_id, s.data_hora AS sessao_data_hora
+            FROM plaud_gravacoes g
+            JOIN sessoes s ON s.id = g.sessao_id
+            WHERE g.profissional_id = $1 AND s.paciente_id = $2
+            ORDER BY g.recebido_em DESC
+            """,
+            profissional_id, paciente_id,
+        )
+    return [dict(row) for row in rows]
+
+
 async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: int) -> dict | None:
     """Vincula uma gravação a uma sessão e atualiza sessoes.observacoes com o
     resumo — adicionado ao final do que já existir, sem apagar nada. Se a sessão já

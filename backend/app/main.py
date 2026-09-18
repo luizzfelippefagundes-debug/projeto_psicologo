@@ -464,6 +464,19 @@ async def listar_sessoes_paciente(paciente_id: int, profissional_id: int = Depen
     return [dict(row) for row in rows]
 
 
+@app.get("/pacientes/{paciente_id}/gravacoes-plaud")
+async def listar_gravacoes_plaud_paciente(
+    paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        paciente = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+    if paciente is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+    return await plaud.listar_por_paciente(profissional_id, paciente_id)
+
+
 @app.get("/pacientes-anamnese")
 async def listar_pacientes_anamnese(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
