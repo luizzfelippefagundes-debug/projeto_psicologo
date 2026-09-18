@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, Pencil } from "lucide-react";
 import type { PlaudGravacaoLista } from "@/lib/api";
 import { formatDataHoraBrasilia } from "@/lib/format";
 import { MarkdownTexto, textoSimples } from "@/components/MarkdownTexto";
@@ -114,9 +114,44 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
   const [erroTexto, setErroTexto] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [erroExcluir, setErroExcluir] = useState<string | null>(null);
+  const [titulo, setTitulo] = useState(g.titulo);
+  const [editandoTitulo, setEditandoTitulo] = useState(false);
+  const [tituloRascunho, setTituloRascunho] = useState(g.titulo ?? "");
+  const [salvandoTitulo, setSalvandoTitulo] = useState(false);
+  const [erroTitulo, setErroTitulo] = useState<string | null>(null);
 
   const rotulo =
-    g.titulo || (g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em));
+    titulo || (g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em));
+
+  function abrirEdicaoTitulo() {
+    setTituloRascunho(titulo ?? "");
+    setErroTitulo(null);
+    setEditandoTitulo(true);
+  }
+
+  async function salvarTitulo() {
+    const novoTitulo = tituloRascunho.trim();
+    if (!novoTitulo) {
+      setErroTitulo("O título não pode ficar em branco.");
+      return;
+    }
+    setSalvandoTitulo(true);
+    setErroTitulo(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${g.id}/titulo`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titulo: novoTitulo }),
+    });
+    if (!res.ok) {
+      setErroTitulo("Não foi possível salvar agora, tenta de novo.");
+      setSalvandoTitulo(false);
+      return;
+    }
+    setTitulo(novoTitulo);
+    setSalvandoTitulo(false);
+    setEditandoTitulo(false);
+  }
 
   async function gerarTextoCurto() {
     setGerando(true);
@@ -158,8 +193,8 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
 
   return (
     <li className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
-      <button type="button" onClick={onToggle} className="flex w-full items-start justify-between gap-4 p-5 text-left">
-        <div className="min-w-0 flex-1">
+      <div className="flex w-full items-start justify-between gap-4 p-5 text-left">
+        <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className="truncate text-[14.5px] font-bold">{rotulo}</div>
           <div className="mt-1 text-[12.5px] text-muted">
             {g.gravado_em ? formatDataHoraBrasilia(g.gravado_em) : formatDataHoraBrasilia(g.recebido_em)}
@@ -169,8 +204,49 @@ function GravacaoCard({ g, aberto, onToggle }: { g: PlaudGravacaoLista; aberto: 
               {g.resumo ? textoSimples(g.resumo) : "Sem resumo disponível."}
             </div>
           )}
+        </button>
+        {aberto && !editandoTitulo && (
+          <button
+            type="button"
+            onClick={abrirEdicaoTitulo}
+            className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-accent-soft hover:text-accent-dark"
+            aria-label="Editar título"
+          >
+            <Pencil className="h-4 w-4" strokeWidth={2} />
+          </button>
+        )}
+      </div>
+
+      {aberto && editandoTitulo && (
+        <div className="border-t border-border px-5 py-4">
+          <input
+            type="text"
+            value={tituloRascunho}
+            onChange={(e) => setTituloRascunho(e.target.value)}
+            className="w-full rounded-xl border border-border bg-card px-3.5 py-2 text-[13.5px] font-bold outline-none focus:border-accent"
+            autoFocus
+          />
+          {erroTitulo && <p className="mt-2 text-[13px] font-semibold text-red-600">{erroTitulo}</p>}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={salvarTitulo}
+              disabled={salvandoTitulo}
+              className="rounded-xl bg-accent px-3.5 py-2 text-[13px] font-bold text-white hover:bg-accent-dark disabled:opacity-60"
+            >
+              {salvandoTitulo ? "Salvando..." : "Salvar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditandoTitulo(false)}
+              disabled={salvandoTitulo}
+              className="rounded-xl border border-border px-3.5 py-2 text-[13px] font-bold text-muted hover:bg-accent-soft disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
-      </button>
+      )}
 
       {aberto && (
         <div className="border-t border-border p-5 pt-4">

@@ -147,6 +147,18 @@ async def obter_gravacao(profissional_id: int, gravacao_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+async def atualizar_titulo(profissional_id: int, gravacao_id: int, titulo: str) -> bool:
+    """Renomeia uma gravação — o título que a Plaud manda costuma vir bagunçado
+    (data/hora coladas, aspas soltas), então ela pode ajustar por aqui. Retorna
+    False se a gravação não existe/não pertence a essa profissional."""
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "UPDATE plaud_gravacoes SET titulo = $1 WHERE id = $2 AND profissional_id = $3",
+            titulo, gravacao_id, profissional_id,
+        )
+    return resultado == "UPDATE 1"
+
+
 async def excluir_gravacao(profissional_id: int, gravacao_id: int) -> bool:
     """Apaga uma gravação recebida. Não mexe na sessão vinculada (se houver) nem
     nas observações que já foram copiadas pra lá — só remove o registro da

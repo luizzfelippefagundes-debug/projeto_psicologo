@@ -579,6 +579,22 @@ async def excluir_gravacao_plaud(
     return {"status": "excluida"}
 
 
+class AtualizarTituloGravacaoBody(BaseModel):
+    titulo: str
+
+
+@app.patch("/plaud/gravacoes/{gravacao_id}/titulo")
+async def atualizar_titulo_gravacao_plaud(
+    gravacao_id: int,
+    body: AtualizarTituloGravacaoBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    atualizado = await plaud.atualizar_titulo(profissional_id, gravacao_id, body.titulo)
+    if not atualizado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+    return {"status": "atualizado"}
+
+
 class VincularGravacaoBody(BaseModel):
     sessao_id: int
 
