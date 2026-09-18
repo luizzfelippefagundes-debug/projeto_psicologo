@@ -43,11 +43,13 @@ CREATE TABLE pacientes (
         CHECK (tipo_atendimento IN ('individual', 'casal')),
     tipo_procedimento VARCHAR(60)
         CHECK (tipo_procedimento IN (
+            'consulta_psicologica',
             'avaliacao_neuropsicologica',
-            'terapia',
-            'reabilitacao_com_estimulacao',
-            'reabilitacao_sem_estimulacao',
-            'neuromodulacao'
+            'plano_neurodesenvolvimento',
+            'plano_casal',
+            'plano_terapeutico',
+            'neuromodulacao',
+            'terapia' -- legado, não oferecido mais como opção nova (ver backend/app/main.py TIPOS_PROCEDIMENTO)
         )), -- obrigatório na aplicação, não no banco (pacientes antigos ficam NULL)
     status VARCHAR(20) NOT NULL DEFAULT 'ativo'
         CHECK (status IN ('ativo', 'inativo')),
