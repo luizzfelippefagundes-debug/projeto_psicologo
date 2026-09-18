@@ -83,3 +83,58 @@ async def extrair_dados_paciente(transcricao: str) -> dict:
         if isinstance(dados.get("data_nascimento"), str)
         else None,
     }
+
+
+async def detectar_agendamento_siri(
+    titulo: str, pacientes: list[dict], locais: list[dict]
+) -> dict:
+    """Tenta identificar, pelo título de um evento criado por voz (Siri) no
+    Calendário iCloud, se é uma consulta com algum paciente já cadastrado — e, se
+    for, com qual e em qual local. Usado na sincronização do iCloud pra decidir se
+    um evento novo vira uma sessão de verdade (vinculada a um paciente) ou só um
+    bloqueio de agenda genérico (compromisso pessoal). Sempre retorna
+    {"paciente_id": ..., "local_id": ...}, cada campo None quando não tiver certeza
+    — nunca inventa um paciente/local que não bate com o texto, e nunca devolve um
+    id fora das listas passadas (defesa contra alucinação)."""
+    if not pacientes:
+        return {"paciente_id": None, "local_id": None}
+
+    ids_pacientes_validos = {p["id"] for p in pacientes}
+    ids_locais_validos = {l["id"] for l in locais}
+
+    lista_pacientes = "\n".join(f"- id {p['id']}: {p['nome']}" for p in pacientes)
+    lista_locais = "\n".join(f"- id {l['id']}: {l['nome']}" for l in locais) or "(nenhum local cadastrado)"
+
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    resposta = await client.messages.create(
+        model=MODELO,
+        max_tokens=128,
+        system=(
+            "Você recebe o título de um evento criado por voz (Siri) no Calendário de "
+            "uma psicóloga, junto com a lista de pacientes e de locais de atendimento "
+            "já cadastrados no sistema dela (cada um com id e nome). Determine se o "
+            "título indica claramente uma consulta com um desses pacientes — considere "
+            "variações razoáveis do nome (apelido óbvio, nome incompleto), mas nunca "
+            "invente um paciente que não bate com o texto. Se o título também deixar "
+            "claro em qual dos locais cadastrados é, identifique o local também. "
+            'Responda APENAS com um JSON, sem texto antes ou depois, no formato exato '
+            '{"paciente_id": id do paciente ou null, "local_id": id do local ou null}. '
+            "Use sempre os ids exatos das listas recebidas."
+        ),
+        messages=[{
+            "role": "user",
+            "content": f"Título do evento: {titulo}\n\nPacientes cadastrados:\n{lista_pacientes}\n\n"
+                       f"Locais cadastrados:\n{lista_locais}",
+        }],
+    )
+    texto = "".join(bloco.text for bloco in resposta.content if bloco.type == "text").strip()
+    dados = _extrair_json(texto)
+    if dados is None:
+        return {"paciente_id": None, "local_id": None}
+
+    paciente_id = dados.get("paciente_id")
+    local_id = dados.get("local_id")
+    return {
+        "paciente_id": paciente_id if paciente_id in ids_pacientes_validos else None,
+        "local_id": local_id if local_id in ids_locais_validos else None,
+    }

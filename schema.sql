@@ -75,11 +75,13 @@ CREATE TABLE sessoes (
         CHECK (status IN ('confirmada', 'reservado', 'cancelada', 'concluida')),
     observacoes TEXT,
     google_event_id VARCHAR(255), -- id do evento espelhado no Google Calendar, se sincronizado
+    icloud_event_uid VARCHAR(255), -- uid do evento de origem no Calendário iCloud, quando criada via Siri
     lembrete_enviado BOOLEAN NOT NULL DEFAULT false,
     expira_em TIMESTAMPTZ, -- só preenchido quando status = 'reservado'; prazo do hold
     lembrete_expiracao_enviado BOOLEAN NOT NULL DEFAULT false, -- evita mandar o aviso de hold quase expirando 2x
     pos_consulta_enviado BOOLEAN NOT NULL DEFAULT false, -- evita mandar a mensagem de acompanhamento do dia seguinte 2x
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (profissional_id, icloud_event_uid),
     -- impede duas sessões sobrepostas no mesmo local (ignora sessões canceladas)
     EXCLUDE USING gist (
         local_id WITH =,

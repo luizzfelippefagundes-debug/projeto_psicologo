@@ -9,6 +9,11 @@ Só leitura nessa fase — não escreve de volta pro iCloud. Sem OAuth possível
 Apple não oferece isso pra CalDAV de terceiro): autenticação é Apple ID + uma
 "senha de app" gerada manualmente em appleid.apple.com.
 
+Todo evento novo passa pela IA (app/ia.py, ver detectar_agendamento_siri) pra
+tentar identificar se é uma consulta com um paciente já cadastrado, pelo texto
+do título — se for, vira uma sessão de verdade (já confirmada, vinculada ao
+paciente), em vez de um bloqueio de agenda genérico.
+
 CalDAV é um protocolo não-oficial pro iCloud (a Apple nunca declarou suporte
 formal) — a biblioteca `caldav` é síncrona (bloqueante); todas as chamadas
 rodam via asyncio.to_thread pra não travar o event loop do FastAPI.
@@ -24,9 +29,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import asyncpg
 import caldav
 
-from app import db
+from app import db, ia
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +95,13 @@ async def desconectar(profissional_id: int) -> None:
                 "DELETE FROM bloqueios_horario WHERE profissional_id = $1 AND icloud_event_uid IS NOT NULL",
                 profissional_id,
             )
+            # Sessões (consultas de verdade, com paciente vinculado) não são
+            # apagadas — só canceladas, pra manter o histórico do paciente.
+            await conn.execute(
+                "UPDATE sessoes SET status = 'cancelada' "
+                "WHERE profissional_id = $1 AND icloud_event_uid IS NOT NULL AND status <> 'cancelada'",
+                profissional_id,
+            )
             await conn.execute(
                 "DELETE FROM icloud_conexoes WHERE profissional_id = $1", profissional_id
             )
@@ -139,6 +152,59 @@ def _sincronizar_sincrono(apple_id: str, senha_app: str, calendar_url: str) -> l
     return eventos
 
 
+async def _tentar_criar_sessao(conn, profissional_id: int, evento: dict, cache: dict) -> bool:
+    """Tenta identificar (via IA) se o evento é uma consulta com um paciente já
+    cadastrado e, se for, cria a sessão direto (já confirmada, vinculada ao
+    paciente). Devolve True se criou a sessão; False se não identificou ninguém
+    (o chamador cria um bloqueio genérico nesse caso) ou se o horário já estava
+    ocupado por outra sessão no mesmo local — cai pra bloqueio também, pra não
+    perder o evento e ela conferir manualmente. `cache` guarda pacientes/locais
+    já buscados nessa mesma sincronização, pra não repetir a consulta a cada
+    evento novo."""
+    if "pacientes" not in cache:
+        pacientes_rows = await conn.fetch(
+            "SELECT id, nome FROM pacientes WHERE profissional_id = $1 AND status = 'ativo'",
+            profissional_id,
+        )
+        locais_rows = await conn.fetch(
+            "SELECT id, nome FROM locais WHERE profissional_id = $1", profissional_id
+        )
+        cache["pacientes"] = [dict(r) for r in pacientes_rows]
+        cache["locais"] = [dict(r) for r in locais_rows]
+
+    if not cache["pacientes"]:
+        return False
+
+    deteccao = await ia.detectar_agendamento_siri(evento["motivo"], cache["pacientes"], cache["locais"])
+    if deteccao["paciente_id"] is None:
+        return False
+
+    local_id = deteccao["local_id"] or (cache["locais"][0]["id"] if cache["locais"] else None)
+    if local_id is None:
+        return False
+
+    duracao_minutos = max(int((evento["fim"] - evento["inicio"]).total_seconds() / 60), 1)
+
+    try:
+        await conn.execute(
+            """
+            INSERT INTO sessoes (profissional_id, paciente_id, local_id, data_hora, duracao_minutos,
+                                  modalidade, status, observacoes, icloud_event_uid)
+            VALUES ($1, $2, $3, $4, $5, 'presencial', 'confirmada', $6, $7)
+            """,
+            profissional_id, deteccao["paciente_id"], local_id, evento["inicio"], duracao_minutos,
+            "Agendada automaticamente via Siri/Calendário iCloud.", evento["uid"],
+        )
+    except asyncpg.exceptions.ExclusionViolationError:
+        logger.warning(
+            "Evento do iCloud identificado como consulta mas horário já ocupado nesse local "
+            "(profissional_id=%s, uid=%s) — virou bloqueio genérico pra ela conferir.",
+            profissional_id, evento["uid"],
+        )
+        return False
+    return True
+
+
 async def puxar_eventos_do_icloud(profissional_id: int) -> dict:
     conexao = await obter_conexao(profissional_id)
     if conexao is None:
@@ -153,20 +219,42 @@ async def puxar_eventos_do_icloud(profissional_id: int) -> dict:
         return {"erro": "Não foi possível sincronizar agora — confira a senha de app."}
 
     uids_atuais = [evento["uid"] for evento in eventos]
-    criados = atualizados = 0
+    criados = atualizados = sessoes_criadas = 0
+    cache: dict = {}
 
     async with db.pool.acquire() as conn:
         for evento in eventos:
-            existente = await conn.fetchval(
+            sessao_existente = await conn.fetchval(
+                "SELECT id FROM sessoes WHERE profissional_id = $1 AND icloud_event_uid = $2",
+                profissional_id, evento["uid"],
+            )
+            if sessao_existente:
+                await conn.execute(
+                    "UPDATE sessoes SET data_hora = $1, duracao_minutos = $2 "
+                    "WHERE id = $3 AND status <> 'cancelada'",
+                    evento["inicio"], max(int((evento["fim"] - evento["inicio"]).total_seconds() / 60), 1),
+                    sessao_existente,
+                )
+                atualizados += 1
+                continue
+
+            bloqueio_existente = await conn.fetchval(
                 "SELECT id FROM bloqueios_horario WHERE profissional_id = $1 AND icloud_event_uid = $2",
                 profissional_id, evento["uid"],
             )
-            if existente:
+            if bloqueio_existente:
                 await conn.execute(
                     "UPDATE bloqueios_horario SET data_inicio = $1, data_fim = $2, motivo = $3 WHERE id = $4",
-                    evento["inicio"], evento["fim"], evento["motivo"], existente,
+                    evento["inicio"], evento["fim"], evento["motivo"], bloqueio_existente,
                 )
                 atualizados += 1
+                continue
+
+            # Evento novo — nunca visto nem como sessão nem como bloqueio. Tenta
+            # identificar se é uma consulta com um paciente cadastrado antes de
+            # cair no comportamento padrão (bloqueio genérico).
+            if await _tentar_criar_sessao(conn, profissional_id, evento, cache):
+                sessoes_criadas += 1
             else:
                 await conn.execute(
                     """
@@ -190,7 +278,29 @@ async def puxar_eventos_do_icloud(profissional_id: int) -> dict:
             profissional_id, uids_atuais,
         )
 
-    return {"criados": criados, "atualizados": atualizados, "removidos": removidos}
+        # Evento de consulta removido/cancelado direto no iCloud: cancela a sessão
+        # em vez de apagar, pra manter o histórico (mesmo tratamento que cancelar
+        # uma sessão manualmente).
+        sessoes_canceladas = await conn.fetchval(
+            """
+            WITH atualizadas AS (
+                UPDATE sessoes SET status = 'cancelada'
+                WHERE profissional_id = $1 AND icloud_event_uid IS NOT NULL AND status <> 'cancelada'
+                  AND NOT (icloud_event_uid = ANY($2::text[]))
+                RETURNING id
+            )
+            SELECT count(*) FROM atualizadas
+            """,
+            profissional_id, uids_atuais,
+        )
+
+    return {
+        "criados": criados,
+        "atualizados": atualizados,
+        "removidos": removidos,
+        "sessoes_criadas": sessoes_criadas,
+        "sessoes_canceladas": sessoes_canceladas,
+    }
 
 
 async def _sincronizar_todos_conectados() -> None:
