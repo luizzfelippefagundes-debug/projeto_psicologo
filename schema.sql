@@ -156,6 +156,7 @@ CREATE TABLE bloqueios_horario (
     motivo VARCHAR(255),
     google_event_id VARCHAR(255), -- id do evento de origem no Google Calendar (quando veio de lá)
     icloud_event_uid VARCHAR(255), -- uid do evento de origem no Calendário iCloud (quando veio de lá)
+    provavel_paciente_nome VARCHAR(255), -- nome sugerido pela IA quando o evento parece consulta mas não bateu com nenhum paciente cadastrado
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (profissional_id, google_event_id),
     UNIQUE (profissional_id, icloud_event_uid)

@@ -101,6 +101,7 @@ export type Bloqueio = {
   data_fim: string;
   motivo: string | null;
   google_event_id: string | null;
+  provavel_paciente_nome: string | null;
 };
 
 export function formatHoraBrasilia(isoDateTime: string) {

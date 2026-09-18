@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Lock, LockOpen, Mic, Pencil, Plus, X } from "lucide-react";
@@ -493,25 +494,39 @@ export function AgendaList({
           if (pos.tipo === "bloqueio-inicio") {
             const bloqueio = pos.bloqueio;
             return (
-              <div
-                key={horaLabel}
-                className="flex items-center gap-4 border-b border-border px-5 py-3.5 last:border-0"
-              >
-                <span className="w-12 shrink-0 text-[13px] font-bold text-muted">{horaLabel}</span>
-                <div className="min-w-0 flex-1 truncate text-[13.5px] text-muted">
-                  {bloqueio.motivo || "Horário bloqueado"}
+              <div key={horaLabel} className="border-b border-border last:border-0">
+                <div className="flex items-center gap-4 px-5 py-3.5">
+                  <span className="w-12 shrink-0 text-[13px] font-bold text-muted">{horaLabel}</span>
+                  <div className="min-w-0 flex-1 truncate text-[13.5px] text-muted">
+                    {bloqueio.motivo || "Horário bloqueado"}
+                  </div>
+                  <span className="shrink-0 rounded-full bg-black/5 px-2.5 py-1 text-[11.5px] font-bold text-muted">
+                    Ocupado
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => removerBloqueio(bloqueio, e)}
+                    aria-label="Desbloquear horário"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
+                  >
+                    <Lock className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </button>
                 </div>
-                <span className="shrink-0 rounded-full bg-black/5 px-2.5 py-1 text-[11.5px] font-bold text-muted">
-                  Ocupado
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => removerBloqueio(bloqueio, e)}
-                  aria-label="Desbloquear horário"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-accent-soft hover:text-fg"
-                >
-                  <Lock className="h-3.5 w-3.5" strokeWidth={2.25} />
-                </button>
+                {bloqueio.provavel_paciente_nome && (
+                  <div className="mx-5 mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-gold-soft px-3.5 py-2.5 text-[12.5px]">
+                    <Mic className="h-3.5 w-3.5 shrink-0 text-gold" strokeWidth={2.25} />
+                    <span className="text-gold">
+                      Parece consulta com <strong>{bloqueio.provavel_paciente_nome}</strong>, que ainda não
+                      está cadastrado.
+                    </span>
+                    <Link
+                      href={`/pacientes?prefill_nome=${encodeURIComponent(bloqueio.provavel_paciente_nome)}`}
+                      className="font-bold text-gold underline hover:no-underline"
+                    >
+                      Cadastrar paciente
+                    </Link>
+                  </div>
+                )}
               </div>
             );
           }

@@ -93,22 +93,23 @@ async def detectar_agendamento_siri(
     for, com qual e em qual local. Usado na sincronização do iCloud pra decidir se
     um evento novo vira uma sessão de verdade (vinculada a um paciente) ou só um
     bloqueio de agenda genérico (compromisso pessoal). Sempre retorna
-    {"paciente_id": ..., "local_id": ...}, cada campo None quando não tiver certeza
-    — nunca inventa um paciente/local que não bate com o texto, e nunca devolve um
-    id fora das listas passadas (defesa contra alucinação)."""
-    if not pacientes:
-        return {"paciente_id": None, "local_id": None}
-
+    {"paciente_id": ..., "local_id": ..., "nome_sugerido": ...}, cada campo None
+    quando não tiver certeza — nunca inventa um paciente/local que não bate com o
+    texto, e nunca devolve um id fora das listas passadas (defesa contra
+    alucinação). `nome_sugerido` só vem preenchido quando o evento claramente
+    parece uma consulta (ex: "Consulta com Fulano", "Sessão — Beltrana") mas o nome
+    não bateu com nenhum paciente cadastrado — útil pra sugerir cadastrar esse
+    paciente, em vez de simplesmente virar um bloqueio genérico sem explicação."""
     ids_pacientes_validos = {p["id"] for p in pacientes}
     ids_locais_validos = {l["id"] for l in locais}
 
-    lista_pacientes = "\n".join(f"- id {p['id']}: {p['nome']}" for p in pacientes)
+    lista_pacientes = "\n".join(f"- id {p['id']}: {p['nome']}" for p in pacientes) or "(nenhum paciente cadastrado)"
     lista_locais = "\n".join(f"- id {l['id']}: {l['nome']}" for l in locais) or "(nenhum local cadastrado)"
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     resposta = await client.messages.create(
         model=MODELO,
-        max_tokens=128,
+        max_tokens=192,
         system=(
             "Você recebe o título de um evento criado por voz (Siri) no Calendário de "
             "uma psicóloga, junto com a lista de pacientes e de locais de atendimento "
@@ -116,10 +117,16 @@ async def detectar_agendamento_siri(
             "título indica claramente uma consulta com um desses pacientes — considere "
             "variações razoáveis do nome (apelido óbvio, nome incompleto), mas nunca "
             "invente um paciente que não bate com o texto. Se o título também deixar "
-            "claro em qual dos locais cadastrados é, identifique o local também. "
+            "claro em qual dos locais cadastrados é, identifique o local também. Se o "
+            "título claramente parece uma consulta (palavras como \"consulta\", "
+            "\"sessão\", \"atendimento\", ou só um nome de pessoa sozinho) mas o nome "
+            "citado NÃO bate com nenhum paciente da lista, extraia esse nome em "
+            "nome_sugerido — mas só nesse caso; pra compromissos pessoais comuns "
+            "(mercado, dentista, almoço com alguém, etc.) deixe nome_sugerido null. "
             'Responda APENAS com um JSON, sem texto antes ou depois, no formato exato '
-            '{"paciente_id": id do paciente ou null, "local_id": id do local ou null}. '
-            "Use sempre os ids exatos das listas recebidas."
+            '{"paciente_id": id do paciente ou null, "local_id": id do local ou null, '
+            '"nome_sugerido": nome da pessoa ou null}. Use sempre os ids exatos das '
+            "listas recebidas."
         ),
         messages=[{
             "role": "user",
@@ -130,11 +137,13 @@ async def detectar_agendamento_siri(
     texto = "".join(bloco.text for bloco in resposta.content if bloco.type == "text").strip()
     dados = _extrair_json(texto)
     if dados is None:
-        return {"paciente_id": None, "local_id": None}
+        return {"paciente_id": None, "local_id": None, "nome_sugerido": None}
 
     paciente_id = dados.get("paciente_id")
     local_id = dados.get("local_id")
+    nome_sugerido = dados.get("nome_sugerido")
     return {
         "paciente_id": paciente_id if paciente_id in ids_pacientes_validos else None,
         "local_id": local_id if local_id in ids_locais_validos else None,
+        "nome_sugerido": nome_sugerido if isinstance(nome_sugerido, str) and nome_sugerido.strip() else None,
     }

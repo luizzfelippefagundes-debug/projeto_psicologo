@@ -152,15 +152,16 @@ def _sincronizar_sincrono(apple_id: str, senha_app: str, calendar_url: str) -> l
     return eventos
 
 
-async def _tentar_criar_sessao(conn, profissional_id: int, evento: dict, cache: dict) -> bool:
+async def _tentar_criar_sessao(conn, profissional_id: int, evento: dict, cache: dict) -> dict:
     """Tenta identificar (via IA) se o evento é uma consulta com um paciente já
     cadastrado e, se for, cria a sessão direto (já confirmada, vinculada ao
-    paciente). Devolve True se criou a sessão; False se não identificou ninguém
-    (o chamador cria um bloqueio genérico nesse caso) ou se o horário já estava
-    ocupado por outra sessão no mesmo local — cai pra bloqueio também, pra não
-    perder o evento e ela conferir manualmente. `cache` guarda pacientes/locais
-    já buscados nessa mesma sincronização, pra não repetir a consulta a cada
-    evento novo."""
+    paciente). Devolve {"criada": True} se criou a sessão. Se não conseguiu (nome
+    não bateu com ninguém, ou o horário já estava ocupado por outra sessão no
+    mesmo local), devolve {"criada": False, "nome_sugerido": ...} — o chamador cria
+    um bloqueio genérico nesse caso, com o nome sugerido anexado (se a IA
+    identificou um, quando o evento claramente parecia consulta) pra ela poder
+    cadastrar esse paciente depois. `cache` guarda pacientes/locais já buscados
+    nessa mesma sincronização, pra não repetir a consulta a cada evento novo."""
     if "pacientes" not in cache:
         pacientes_rows = await conn.fetch(
             "SELECT id, nome FROM pacientes WHERE profissional_id = $1 AND status = 'ativo'",
@@ -172,16 +173,13 @@ async def _tentar_criar_sessao(conn, profissional_id: int, evento: dict, cache: 
         cache["pacientes"] = [dict(r) for r in pacientes_rows]
         cache["locais"] = [dict(r) for r in locais_rows]
 
-    if not cache["pacientes"]:
-        return False
-
     deteccao = await ia.detectar_agendamento_siri(evento["motivo"], cache["pacientes"], cache["locais"])
     if deteccao["paciente_id"] is None:
-        return False
+        return {"criada": False, "nome_sugerido": deteccao["nome_sugerido"]}
 
     local_id = deteccao["local_id"] or (cache["locais"][0]["id"] if cache["locais"] else None)
     if local_id is None:
-        return False
+        return {"criada": False, "nome_sugerido": None}
 
     duracao_minutos = max(int((evento["fim"] - evento["inicio"]).total_seconds() / 60), 1)
 
@@ -201,8 +199,8 @@ async def _tentar_criar_sessao(conn, profissional_id: int, evento: dict, cache: 
             "(profissional_id=%s, uid=%s) — virou bloqueio genérico pra ela conferir.",
             profissional_id, evento["uid"],
         )
-        return False
-    return True
+        return {"criada": False, "nome_sugerido": None}
+    return {"criada": True, "nome_sugerido": None}
 
 
 async def puxar_eventos_do_icloud(profissional_id: int) -> dict:
@@ -253,15 +251,18 @@ async def puxar_eventos_do_icloud(profissional_id: int) -> dict:
             # Evento novo — nunca visto nem como sessão nem como bloqueio. Tenta
             # identificar se é uma consulta com um paciente cadastrado antes de
             # cair no comportamento padrão (bloqueio genérico).
-            if await _tentar_criar_sessao(conn, profissional_id, evento, cache):
+            resultado_sessao = await _tentar_criar_sessao(conn, profissional_id, evento, cache)
+            if resultado_sessao["criada"]:
                 sessoes_criadas += 1
             else:
                 await conn.execute(
                     """
-                    INSERT INTO bloqueios_horario (profissional_id, data_inicio, data_fim, motivo, icloud_event_uid)
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO bloqueios_horario
+                        (profissional_id, data_inicio, data_fim, motivo, icloud_event_uid, provavel_paciente_nome)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     """,
                     profissional_id, evento["inicio"], evento["fim"], evento["motivo"], evento["uid"],
+                    resultado_sessao["nome_sugerido"],
                 )
                 criados += 1
 

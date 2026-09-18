@@ -709,7 +709,7 @@ async def listar_bloqueios(
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, local_id, data_inicio, data_fim, motivo, google_event_id
+            SELECT id, local_id, data_inicio, data_fim, motivo, google_event_id, provavel_paciente_nome
             FROM bloqueios_horario
             WHERE profissional_id = $1
               AND data_inicio::date <= $3 AND data_fim::date >= $2
