@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import { DIAS_SEMANA, formatHoraCurta, type Local, type RegraHorario } from "@/lib/format";
@@ -21,6 +21,30 @@ function agruparPorHorario(regras: RegraHorario[]) {
     }
   }
   return Array.from(grupos.values()).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+}
+
+// Junta grupos que caem exatamente nos mesmos dias (ex: "Ter, Sex" de manhã e "Ter,
+// Sex" de tarde) numa única linha, com os horários separados por "/" — evita repetir
+// os mesmos dias em várias linhas seguidas só porque o horário muda.
+function agruparPorDias(regras: RegraHorario[]) {
+  const gruposPorHorario = agruparPorHorario(regras);
+  const porDias = new Map<
+    string,
+    { dias: number[]; slots: { horaInicio: string; horaFim: string; regras: RegraHorario[] }[] }
+  >();
+  for (const grupo of gruposPorHorario) {
+    const dias = [...new Set(grupo.regras.map((r) => r.dia_semana))].sort((a, b) => a - b);
+    const chave = dias.join(",");
+    const existente = porDias.get(chave);
+    if (existente) {
+      existente.slots.push(grupo);
+    } else {
+      porDias.set(chave, { dias, slots: [grupo] });
+    }
+  }
+  return Array.from(porDias.values()).sort((a, b) =>
+    a.slots[0].horaInicio.localeCompare(b.slots[0].horaInicio)
+  );
 }
 
 function formatarDias(regras: RegraHorario[]): string {
@@ -367,38 +391,48 @@ export function RegrasHorarioManager({
               <p className="text-[13.5px] text-muted">Nenhum horário cadastrado ainda.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {agruparPorHorario(regrasDoLocal).map((grupo) => (
+                {agruparPorDias(regrasDoLocal).map((grupoDias) => (
                   <li
-                    key={`${grupo.horaInicio}-${grupo.horaFim}`}
-                    className="flex items-center justify-between rounded-xl bg-accent-soft px-4 py-2.5 text-[14px]"
+                    key={grupoDias.dias.join(",")}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-accent-soft px-4 py-2.5 text-[14px]"
                   >
                     <span className="font-semibold text-accent-dark">
-                      {formatarDias(grupo.regras)} · {formatHoraCurta(grupo.horaInicio)} –{" "}
-                      {formatHoraCurta(grupo.horaFim)}
+                      {formatarDias(grupoDias.slots[0].regras)} ·{" "}
+                      {grupoDias.slots
+                        .map((slot) => `${formatHoraCurta(slot.horaInicio)}–${formatHoraCurta(slot.horaFim)}`)
+                        .join(" / ")}
                     </span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      {grupoDias.slots.map((slot) => (
+                        <div key={`${slot.horaInicio}-${slot.horaFim}`} className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => abrirEdicao(local.id, slot)}
+                            aria-label={`Editar horário ${formatHoraCurta(slot.horaInicio)}–${formatHoraCurta(slot.horaFim)}`}
+                            title="Editar"
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-accent-dark hover:bg-accent/10"
+                          >
+                            <Pencil className="h-3.5 w-3.5" strokeWidth={2.5} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemover(slot.regras.map((r) => r.id))}
+                            aria-label={`Remover horário ${formatHoraCurta(slot.horaInicio)}–${formatHoraCurta(slot.horaFim)}`}
+                            title="Remover"
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-red-600 hover:bg-red-600/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      ))}
                       <button
                         type="button"
-                        onClick={() => abrirAdicionar(local.id, grupo)}
+                        onClick={() => abrirAdicionar(local.id, { regras: grupoDias.slots[0].regras })}
                         aria-label="Adicionar outro horário nesse(s) dia(s)"
                         title="Adicionar outro horário nesse(s) dia(s)"
                         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-accent-dark hover:bg-accent/10"
                       >
                         <Plus className="h-4 w-4" strokeWidth={2.5} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => abrirEdicao(local.id, grupo)}
-                        className="text-[13px] font-semibold text-accent-dark hover:underline"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemover(grupo.regras.map((r) => r.id))}
-                        className="text-[13px] font-semibold text-red-600 hover:underline"
-                      >
-                        Remover
                       </button>
                     </div>
                   </li>
