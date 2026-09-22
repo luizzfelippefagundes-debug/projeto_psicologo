@@ -14,7 +14,14 @@ const CHAVE_SEM_VINCULO = "__sem_vinculo__";
 
 type Grupo = { chave: string; nome: string; gravacoes: PlaudGravacaoLista[] };
 type Aba = "resumo" | "texto" | "mapa" | "transcricao";
-type DadosPaciente = { nome: string | null; data_nascimento: string | null };
+type DadosPaciente = {
+  paciente_id: number | null;
+  paciente_nome: string | null;
+  sessao_id: number | null;
+  sessao_data_hora: string | null;
+  nome: string | null;
+  data_nascimento: string | null;
+};
 
 const ABAS: [Aba, string][] = [
   ["resumo", "Resumo"],
@@ -42,8 +49,10 @@ function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
 }
 
 function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: number; temTranscricao: boolean }) {
+  const router = useRouter();
   const [dados, setDados] = useState<DadosPaciente | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [vinculando, setVinculando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   async function detectar() {
@@ -63,7 +72,52 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
     setCarregando(false);
   }
 
+  async function vincular(sessaoId: number) {
+    setVinculando(true);
+    setErro(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${gravacaoId}/vincular`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessao_id: sessaoId }),
+    });
+    if (!res.ok) {
+      setErro("Não foi possível vincular agora, tenta de novo.");
+      setVinculando(false);
+      return;
+    }
+    router.refresh();
+  }
+
   if (dados) {
+    // Paciente já cadastrado, identificado pela IA — vincula direto à sessão dele
+    // mais próxima da data da gravação, sem precisar cadastrar nada de novo.
+    if (dados.paciente_id) {
+      return (
+        <div className="rounded-xl bg-accent-soft p-3.5 text-[13.5px]">
+          <p className="font-bold text-fg">Essa gravação parece ser de {dados.paciente_nome}.</p>
+          {dados.sessao_id ? (
+            <button
+              type="button"
+              onClick={() => vincular(dados.sessao_id!)}
+              disabled={vinculando}
+              className="mt-2 inline-block rounded-xl bg-accent px-3.5 py-2 text-[13px] font-bold text-white hover:bg-accent-dark disabled:opacity-60"
+            >
+              {vinculando
+                ? "Vinculando..."
+                : `Vincular à sessão de ${formatDataHoraBrasilia(dados.sessao_data_hora!)}`}
+            </button>
+          ) : (
+            <p className="mt-1 text-muted">
+              Não achei uma sessão livre dele por perto pra vincular automaticamente — vincule pela
+              sessão certa na Agenda.
+            </p>
+          )}
+          {erro && <p className="mt-2 text-[13px] font-semibold text-red-600">{erro}</p>}
+        </div>
+      );
+    }
+
     if (!dados.nome) {
       return (
         <div className="rounded-xl bg-black/5 p-3.5 text-[13.5px] text-muted">

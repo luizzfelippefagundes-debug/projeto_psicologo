@@ -667,13 +667,37 @@ async def extrair_dados_paciente_plaud(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Essa gravação ainda não tem transcrição"
         )
+
+    async with db.pool.acquire() as conn:
+        pacientes_rows = await conn.fetch(
+            "SELECT id, nome FROM pacientes WHERE profissional_id = $1 AND status = 'ativo'",
+            profissional_id,
+        )
+    pacientes = [dict(r) for r in pacientes_rows]
+
     try:
-        return await ia.extrair_dados_paciente(gravacao["transcricao"])
+        dados = await ia.extrair_dados_paciente(gravacao["transcricao"], pacientes)
     except anthropic.APIError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Não foi possível analisar agora, tenta de novo",
         )
+
+    if dados["paciente_id"] is None:
+        return {"paciente_id": None, "paciente_nome": None, "sessao_id": None,
+                "sessao_data_hora": None, "nome": dados["nome"], "data_nascimento": dados["data_nascimento"]}
+
+    paciente_nome = next((p["nome"] for p in pacientes if p["id"] == dados["paciente_id"]), None)
+    referencia = gravacao["gravado_em"] or gravacao["recebido_em"]
+    sessao = await plaud.buscar_sessao_para_vincular(profissional_id, dados["paciente_id"], referencia)
+    return {
+        "paciente_id": dados["paciente_id"],
+        "paciente_nome": paciente_nome,
+        "sessao_id": sessao["id"] if sessao else None,
+        "sessao_data_hora": sessao["data_hora"] if sessao else None,
+        "nome": None,
+        "data_nascimento": None,
+    }
 
 
 @app.get("/sessoes/dias")

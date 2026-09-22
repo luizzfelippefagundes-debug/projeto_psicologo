@@ -109,6 +109,31 @@ async def listar_por_paciente(profissional_id: int, paciente_id: int) -> list:
     return [dict(row) for row in rows]
 
 
+async def buscar_sessao_para_vincular(profissional_id: int, paciente_id: int, referencia: datetime) -> dict | None:
+    """Acha a sessão desse paciente mais próxima (no tempo) da data de referência
+    (normalmente quando a gravação foi feita) que ainda não tem nenhuma gravação
+    vinculada — candidata natural pra vincular a gravação automaticamente quando a
+    IA identifica que a gravação é de um paciente já cadastrado. Só considera
+    sessões dentro de uma janela de 3 dias da referência (pra não sugerir vincular
+    a uma sessão de semanas de diferença por engano) e ignora sessões canceladas.
+    Devolve None se não achar nenhuma candidata."""
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT s.id, s.data_hora
+            FROM sessoes s
+            LEFT JOIN plaud_gravacoes g ON g.sessao_id = s.id
+            WHERE s.paciente_id = $1 AND s.profissional_id = $2 AND g.id IS NULL
+              AND s.status <> 'cancelada'
+              AND ABS(EXTRACT(EPOCH FROM (s.data_hora - $3))) < 3 * 24 * 60 * 60
+            ORDER BY ABS(EXTRACT(EPOCH FROM (s.data_hora - $3)))
+            LIMIT 1
+            """,
+            paciente_id, profissional_id, referencia,
+        )
+    return dict(row) if row else None
+
+
 async def vincular_a_sessao(profissional_id: int, gravacao_id: int, sessao_id: int) -> dict | None:
     """Vincula uma gravação a uma sessão e atualiza sessoes.observacoes com o
     resumo — adicionado ao final do que já existir, sem apagar nada. Se a sessão já

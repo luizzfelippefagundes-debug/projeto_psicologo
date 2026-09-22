@@ -50,14 +50,29 @@ async def gerar_texto_curto(transcricao: str) -> str:
     return "".join(bloco.text for bloco in resposta.content if bloco.type == "text").strip()
 
 
-async def extrair_dados_paciente(transcricao: str) -> dict:
-    """Tenta identificar nome e data de nascimento do PACIENTE (não de quem mais
-    estiver falando na sessão, como um responsável) na transcrição. Sempre retorna
-    {"nome": ..., "data_nascimento": ...} — cada campo None quando não tiver
-    certeza. Nunca inventa dado que não esteja claramente dito no texto; se só o
-    dia/mês da data de nascimento aparecer (sem o ano), data_nascimento fica None,
-    já que uma data sem ano não é válida pro cadastro (PacienteBody.data_nascimento
-    é um date completo)."""
+async def extrair_dados_paciente(transcricao: str, pacientes: list[dict] | None = None) -> dict:
+    """Tenta identificar o PACIENTE (não quem mais estiver falando na sessão, como
+    um responsável) numa transcrição — e, se ele já for um paciente cadastrado,
+    identificar qual. Sempre retorna {"paciente_id": ..., "nome": ...,
+    "data_nascimento": ...}, cada campo None quando não tiver certeza. Nunca
+    inventa dado que não esteja claramente dito no texto, nem devolve um
+    paciente_id fora da lista passada (defesa contra alucinação); se só o dia/mês
+    da data de nascimento aparecer (sem o ano), data_nascimento fica None, já que
+    uma data sem ano não é válida pro cadastro (PacienteBody.data_nascimento é um
+    date completo). `pacientes` (lista de {id, nome} já cadastrados) é opcional —
+    passar quando o objetivo é também checar se é alguém que já existe (usado ao
+    detectar o paciente de uma gravação nova, pra evitar sugerir cadastro
+    duplicado de quem já é paciente)."""
+    pacientes = pacientes or []
+    ids_validos = {p["id"] for p in pacientes}
+    lista_pacientes = (
+        "\n\nPacientes já cadastrados (verifique se o paciente da transcrição é um "
+        "desses, considerando variações razoáveis do nome — apelido, nome "
+        "incompleto):\n" + "\n".join(f"- id {p['id']}: {p['nome']}" for p in pacientes)
+        if pacientes
+        else ""
+    )
+
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     resposta = await client.messages.create(
         model=MODELO,
@@ -66,18 +81,25 @@ async def extrair_dados_paciente(transcricao: str) -> dict:
             'Você identifica dados do PACIENTE (não de quem mais estiver falando na '
             'sessão, como um responsável) numa transcrição de sessão de psicologia. '
             'Responda APENAS com um JSON, sem nenhum texto antes ou depois, no formato '
-            'exato {"nome": string ou null, "data_nascimento": string "YYYY-MM-DD" ou '
-            'null}. Só preencha um campo se estiver claramente dito na transcrição — '
-            'nunca invente ou deduza. Se só o dia e o mês da data de nascimento forem '
-            "mencionados, sem o ano, deixe data_nascimento como null."
+            'exato {"paciente_id": id do paciente ou null, "nome": string ou null, '
+            '"data_nascimento": string "YYYY-MM-DD" ou null}. Só preencha nome/'
+            "data_nascimento se estiverem claramente ditos na transcrição — nunca "
+            "invente ou deduza. Se só o dia e o mês da data de nascimento forem "
+            "mencionados, sem o ano, deixe data_nascimento como null. Se a lista de "
+            "pacientes cadastrados foi passada e o paciente da transcrição bate com "
+            "um deles, preencha paciente_id com o id exato dele (e pode deixar "
+            "nome/data_nascimento null, já que ele já está cadastrado)."
+            + lista_pacientes
         ),
         messages=[{"role": "user", "content": transcricao}],
     )
     texto = "".join(bloco.text for bloco in resposta.content if bloco.type == "text").strip()
     dados = _extrair_json(texto)
     if dados is None:
-        return {"nome": None, "data_nascimento": None}
+        return {"paciente_id": None, "nome": None, "data_nascimento": None}
+    paciente_id = dados.get("paciente_id")
     return {
+        "paciente_id": paciente_id if paciente_id in ids_validos else None,
         "nome": dados.get("nome") if isinstance(dados.get("nome"), str) else None,
         "data_nascimento": dados.get("data_nascimento")
         if isinstance(dados.get("data_nascimento"), str)
