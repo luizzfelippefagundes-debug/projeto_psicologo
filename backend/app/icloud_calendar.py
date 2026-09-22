@@ -37,7 +37,11 @@ from app import db, ia
 logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-INTERVALO_SINCRONIZACAO = timedelta(minutes=1)
+# 5 min (não 1) pra não manter o compute do banco (Neon) sempre acordado — sync a
+# cada 1 minuto nunca deixava o compute ficar ocioso tempo suficiente pra suspender
+# (scale to zero), estourando a cota de horas de compute do plano bem antes do mês
+# fechar.
+INTERVALO_SINCRONIZACAO = timedelta(minutes=5)
 ICLOUD_URL = "https://caldav.icloud.com"
 
 

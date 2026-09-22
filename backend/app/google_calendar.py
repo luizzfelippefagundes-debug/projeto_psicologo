@@ -12,7 +12,11 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-INTERVALO_SINCRONIZACAO = timedelta(minutes=1)
+# 5 min (não 1) pra não manter o compute do banco (Neon) sempre acordado — sync a
+# cada 1 minuto nunca deixava o compute ficar ocioso tempo suficiente pra suspender
+# (scale to zero), estourando a cota de horas de compute do plano bem antes do mês
+# fechar.
+INTERVALO_SINCRONIZACAO = timedelta(minutes=5)
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
