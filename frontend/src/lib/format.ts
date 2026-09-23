@@ -250,7 +250,7 @@ export type ConversaEscalonada = {
   telefone_paciente: string | null;
   paciente_nome: string | null;
   previa_conversa: string;
-  motivo: "crise" | "fora_do_escopo";
+  motivo: "crise" | "fora_do_escopo" | "pedido_especial";
   resolvido: boolean;
   notificado_em: string;
 };

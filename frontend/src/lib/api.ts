@@ -66,6 +66,8 @@ export type Profissional = {
   email: string;
   slug: string;
   plaud_webhook_token: string;
+  nome_secretaria: string | null;
+  valor_consulta: number | null;
 };
 
 export function getMe() {

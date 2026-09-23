@@ -7,6 +7,12 @@ import { formatDataHoraBrasilia, type ConversaEscalonada } from "@/lib/format";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 
+const MOTIVO_LABEL: Record<ConversaEscalonada["motivo"], string> = {
+  crise: "Crise",
+  fora_do_escopo: "Fora do escopo",
+  pedido_especial: "Pedido especial",
+};
+
 export function AlertaCrise({ conversas }: { conversas: ConversaEscalonada[] }) {
   const router = useRouter();
   const [resolvendo, setResolvendo] = useState<number | null>(null);
@@ -44,7 +50,7 @@ export function AlertaCrise({ conversas }: { conversas: ConversaEscalonada[] }) 
                 )}
               </span>
               <span className="rounded-full bg-red-500/10 px-2.5 py-0.5 text-[11.5px] font-bold text-red-600">
-                {c.motivo === "crise" ? "Crise" : "Fora do escopo"}
+                {MOTIVO_LABEL[c.motivo]}
               </span>
             </div>
             <p className="mb-2 text-fg">{c.previa_conversa}</p>

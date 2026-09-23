@@ -9,6 +9,8 @@ CREATE TABLE profissionais (
     email VARCHAR(150) NOT NULL UNIQUE,
     senha_hash TEXT NOT NULL,
     whatsapp_instance VARCHAR(100) UNIQUE, -- nome da instância na Evolution API, preenchido ao parear o número
+    valor_consulta NUMERIC(10,2), -- valor cobrado pela consulta; nulo = bot não fala de preço, nunca inventa
+    nome_secretaria VARCHAR(100), -- nome que o bot usa pra se apresentar (ex: "Laura"); nulo = não se apresenta por nome
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
     -- slug VARCHAR UNIQUE (link público de agendamento, ver docs/superpowers/specs/2026-09-03-agendamento-paciente-web-design.md)
 );
@@ -187,7 +189,7 @@ CREATE TABLE conversas_escalonadas (
     paciente_id INTEGER REFERENCES pacientes(id) ON DELETE SET NULL, -- pode ser nulo se ainda não identificado
     telefone_paciente VARCHAR(20), -- sempre preenchido pelo bot, mesmo sem paciente_id
     previa_conversa TEXT NOT NULL,
-    motivo VARCHAR(30) NOT NULL CHECK (motivo IN ('crise', 'fora_do_escopo')),
+    motivo VARCHAR(30) NOT NULL CHECK (motivo IN ('crise', 'fora_do_escopo', 'pedido_especial')),
     resolvido BOOLEAN NOT NULL DEFAULT false,
     notificado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );

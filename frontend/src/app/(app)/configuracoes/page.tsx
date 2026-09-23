@@ -6,6 +6,7 @@ import { GoogleCalendarConexao } from "@/components/GoogleCalendarConexao";
 import { IcloudCalendarConexao } from "@/components/IcloudCalendarConexao";
 import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
 import { PlaudConexao } from "@/components/PlaudConexao";
+import { ConfigBot } from "@/components/ConfigBot";
 import { getGoogleStatus, getIcloudStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
@@ -42,6 +43,16 @@ export default async function ConfiguracoesPage() {
           WhatsApp estiver fora do ar.
         </p>
         <LinkAgendamentoCopiar slug={profissional.slug} />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Bot de agendamento (WhatsApp)</h2>
+        <p className="mb-4 text-[14px] text-muted">
+          O nome aparece quando o bot se apresenta na primeira mensagem de cada conversa. O valor da
+          consulta é informado quando perguntarem o preço — deixe em branco se não quiser que o bot
+          fale de valores.
+        </p>
+        <ConfigBot nomeSecretaria={profissional.nome_secretaria} valorConsulta={profissional.valor_consulta} />
       </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">

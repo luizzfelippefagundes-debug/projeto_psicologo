@@ -196,6 +196,8 @@ export function AgendaList({
   const [vinculandoGravacao, setVinculandoGravacao] = useState(false);
   const [gravacaoVinculada, setGravacaoVinculada] = useState<PlaudGravacaoDetalhe | null>(null);
   const [transcricaoAberta, setTranscricaoAberta] = useState(false);
+  const [confirmandoWhatsapp, setConfirmandoWhatsapp] = useState(false);
+  const [confirmacaoWhatsappMsg, setConfirmacaoWhatsappMsg] = useState<string | null>(null);
 
   // Atualiza sozinho a cada 30s — sem isso, um compromisso marcado no Google Calendar
   // (sincronizado no servidor a cada 1min) só aparecia aqui depois de recarregar a
@@ -226,6 +228,24 @@ export function AgendaList({
   function abrirPreview(sessao: SessaoPeriodo) {
     setSessaoVisualizando(sessao);
     setPreviewAberto(true);
+    setConfirmacaoWhatsappMsg(null);
+  }
+
+  async function confirmarPorWhatsapp(sessaoId: number) {
+    setConfirmandoWhatsapp(true);
+    setConfirmacaoWhatsappMsg(null);
+    const res = await fetch(`${API_URL}/sessoes/${sessaoId}/confirmar-por-whatsapp`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setConfirmacaoWhatsappMsg(data.detail ?? "Não foi possível enviar agora, tenta de novo.");
+      setConfirmandoWhatsapp(false);
+      return;
+    }
+    setConfirmacaoWhatsappMsg("Confirmação enviada por WhatsApp.");
+    setConfirmandoWhatsapp(false);
   }
 
   async function salvarSessao(notificar: boolean) {
@@ -572,26 +592,40 @@ export function AgendaList({
             />
             <InfoRow label="Anotações" valor={sessaoVisualizando.observacoes || "—"} />
 
-            <div className="flex justify-end gap-3 pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <button
                 type="button"
-                onClick={() => setPreviewAberto(false)}
-                className="rounded-xl border border-border px-5 py-2.5 text-[14.5px] font-bold text-fg transition-colors hover:bg-accent-soft"
+                onClick={() => confirmarPorWhatsapp(sessaoVisualizando.id)}
+                disabled={confirmandoWhatsapp}
+                className="rounded-xl border border-border px-4 py-2.5 text-[13.5px] font-bold text-fg transition-colors hover:bg-accent-soft disabled:opacity-60"
               >
-                Fechar
+                {confirmandoWhatsapp ? "Enviando..." : "Confirmar por WhatsApp"}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewAberto(false);
-                  abrirEdicao(sessaoVisualizando);
-                }}
-                className="flex items-center gap-1.5 rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark"
-              >
-                <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
-                Editar
-              </button>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPreviewAberto(false)}
+                  className="rounded-xl border border-border px-5 py-2.5 text-[14.5px] font-bold text-fg transition-colors hover:bg-accent-soft"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewAberto(false);
+                    abrirEdicao(sessaoVisualizando);
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl bg-accent px-5 py-2.5 text-[14.5px] font-bold text-white transition-colors hover:bg-accent-dark"
+                >
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  Editar
+                </button>
+              </div>
             </div>
+            {confirmacaoWhatsappMsg && (
+              <p className="text-[13px] font-semibold text-muted">{confirmacaoWhatsappMsg}</p>
+            )}
           </div>
         )}
       </Modal>

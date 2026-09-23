@@ -152,18 +152,31 @@ async def enviar_alerta_crise(
         return
 
     resend.api_key = settings.resend_api_key
-    motivo_label = "situação de crise" if motivo == "crise" else "fora do escopo do atendimento"
+    motivo_label = {
+        "crise": "situação de crise",
+        "fora_do_escopo": "fora do escopo do atendimento",
+        "pedido_especial": "pedido especial de horário",
+    }.get(motivo, "fora do escopo do atendimento")
     linha_paciente = (
         f"Paciente: {paciente_nome} ({telefone_paciente})"
         if paciente_nome
         else f"Paciente (telefone): {telefone_paciente}"
     )
 
+    # "pedido_especial" não é urgência (paciente só pediu um horário fora do que
+    # tem disponível) — evita o tom de alarme usado pra crise/fora do escopo.
+    urgente = motivo != "pedido_especial"
+    frase_destaque = (
+        "O assistente identificou uma conversa que precisa da sua atenção imediata"
+        if urgente
+        else "O assistente registrou um pedido que precisa da sua decisão"
+    )
+    assunto_prefixo = "⚠️ Atenção necessária" if urgente else "Pedido de horário especial"
+
     html = f"""
     <div style="font-family: sans-serif; font-size: 15px; color: #2b2320;">
       <p>Olá, {profissional_nome}.</p>
-      <p><strong>O assistente identificou uma conversa que precisa da sua atenção imediata</strong>
-      ({motivo_label}).</p>
+      <p><strong>{frase_destaque}</strong> ({motivo_label}).</p>
       <p>{linha_paciente}</p>
       <p style="background:#f5ecd6; padding:12px; border-radius:8px;">{resumo_conversa}</p>
       <p style="color: #8a7f78; font-size: 13px;">Mensagem automática — não responda este email.</p>
@@ -176,7 +189,7 @@ async def enviar_alerta_crise(
             {
                 "from": settings.resend_from_email,
                 "to": profissional_email,
-                "subject": f"⚠️ Atenção necessária — {motivo_label}",
+                "subject": f"{assunto_prefixo} — {motivo_label}",
                 "html": html,
             },
         )

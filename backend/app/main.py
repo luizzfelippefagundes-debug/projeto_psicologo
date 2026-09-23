@@ -4,6 +4,7 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 import asyncpg
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
@@ -18,6 +19,7 @@ from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+BRASILIA = ZoneInfo("America/Sao_Paulo")
 
 
 @asynccontextmanager
@@ -128,8 +130,27 @@ async def logout(response: Response):
 async def me(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, nome, email, slug, plaud_webhook_token FROM profissionais WHERE id = $1",
+            "SELECT id, nome, email, slug, plaud_webhook_token, valor_consulta, nome_secretaria "
+            "FROM profissionais WHERE id = $1",
             profissional_id,
+        )
+    return dict(row)
+
+
+class ConfigBotBody(BaseModel):
+    nome_secretaria: str | None = None
+    valor_consulta: float | None = None
+
+
+@app.patch("/auth/me/config-bot")
+async def atualizar_config_bot(
+    body: ConfigBotBody, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE profissionais SET nome_secretaria = $1, valor_consulta = $2 WHERE id = $3 "
+            "RETURNING nome_secretaria, valor_consulta",
+            body.nome_secretaria, body.valor_consulta, profissional_id,
         )
     return dict(row)
 
@@ -901,6 +922,54 @@ async def criar_sessao(body: SessaoBody, profissional_id: int = Depends(auth.get
             )
 
     return dict(row)
+
+
+@app.post("/sessoes/{sessao_id}/confirmar-por-whatsapp")
+async def confirmar_sessao_por_whatsapp(
+    sessao_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    """Manda uma mensagem de confirmação por WhatsApp pro paciente — pensado pro caso da
+    profissional ter marcado a consulta por telefone e querer registrar o agendamento também
+    por lá, no mesmo padrão que o bot usa quando agenda pelo chat."""
+    async with db.pool.acquire() as conn:
+        info = await conn.fetchrow(
+            """
+            SELECT s.data_hora, p.nome AS paciente_nome, p.telefone, l.nome AS local_nome,
+                   pr.nome AS profissional_nome, pr.nome_secretaria, pr.valor_consulta, pr.whatsapp_instance
+            FROM sessoes s
+            JOIN pacientes p ON p.id = s.paciente_id
+            JOIN locais l ON l.id = s.local_id
+            JOIN profissionais pr ON pr.id = s.profissional_id
+            WHERE s.id = $1 AND s.profissional_id = $2
+            """,
+            sessao_id, profissional_id,
+        )
+    if info is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+    if not info["whatsapp_instance"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="WhatsApp do bot não está conectado"
+        )
+
+    quem_fala = f"aqui é {info['nome_secretaria']}, secretária" if info["nome_secretaria"] else "aqui é a secretária"
+    data_formatada = info["data_hora"].astimezone(BRASILIA).strftime("%d/%m/%Y às %H:%M")
+    valor_frase = f" O valor da consulta é R$ {info['valor_consulta']:.2f}." if info["valor_consulta"] is not None else ""
+
+    texto = (
+        f"Oi, {info['paciente_nome']}, {quem_fala} de {info['profissional_nome']}. Acabamos de nos "
+        "falar por telefone e estou enviando essa mensagem apenas para registrar o agendamento da "
+        f"consulta por aqui também. Ficou marcado dia {data_formatada}, em {info['local_nome']}. "
+        f"Bloqueei o horário na agenda para você.{valor_frase} Caso tenha algum imprevisto, peço que "
+        "nos avise com 48 horas de antecedência, ok?"
+    )
+
+    try:
+        await evolution.enviar_mensagem_texto(info["whatsapp_instance"], info["telefone"], texto)
+    except Exception:
+        logger.exception("Falha ao enviar confirmação por WhatsApp (sessao_id=%s)", sessao_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Não foi possível enviar agora, tenta de novo")
+
+    return {"status": "enviado"}
 
 
 @app.patch("/sessoes/{sessao_id}")

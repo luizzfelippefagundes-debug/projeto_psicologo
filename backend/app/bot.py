@@ -400,7 +400,7 @@ async def escalar_conversa(
     resumo: str,
     nome_paciente: str | None = None,
 ) -> None:
-    if motivo not in ("crise", "fora_do_escopo"):
+    if motivo not in ("crise", "fora_do_escopo", "pedido_especial"):
         motivo = "fora_do_escopo"
 
     async with db.pool.acquire() as conn:
@@ -629,6 +629,27 @@ TOOLS = [
             "required": ["motivo", "resumo"],
         },
     },
+    {
+        "name": "solicitar_horario_especial",
+        "description": (
+            "Use quando um paciente que já tem cadastro pedir um horário mais próximo do que os "
+            "que estão realmente disponíveis (ex: quer essa semana mas só tem vaga daqui um mês). "
+            "Registra o pedido pra profissional avaliar se abre um horário especial pra ele — NÃO "
+            "cria nem promete nenhum agendamento de verdade. Depois de chamar, informe ao paciente "
+            "que você vai consultar a possibilidade com a profissional e retornar em até 24 horas."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "resumo": {
+                    "type": "string",
+                    "description": "Breve resumo do que o paciente pediu, pra dar contexto à profissional.",
+                },
+                "nome_paciente": {"type": "string", "description": "Nome do paciente"},
+            },
+            "required": ["resumo"],
+        },
+    },
 ]
 
 
@@ -694,6 +715,13 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
             )
             return "ESCALADO"
 
+        if nome == "solicitar_horario_especial":
+            await escalar_conversa(
+                profissional_id, telefone_paciente, "pedido_especial", entrada["resumo"],
+                entrada.get("nome_paciente"),
+            )
+            return "Pedido registrado com sucesso — a profissional vai avaliar."
+
         return f"Ferramenta desconhecida: {nome}"
     except ValueError as e:
         return f"Erro: {e}"
@@ -716,20 +744,41 @@ async def processar_mensagem(
             "SELECT nome FROM locais WHERE profissional_id = $1 ORDER BY nome", profissional_id
         )
         profissional = await conn.fetchrow(
-            "SELECT nome FROM profissionais WHERE id = $1", profissional_id
+            "SELECT nome, valor_consulta, nome_secretaria FROM profissionais WHERE id = $1", profissional_id
         )
 
     nomes_locais = ", ".join(l["nome"] for l in locais) or "nenhum local cadastrado ainda"
     agora_str = datetime.now(BRASILIA).strftime("%Y-%m-%d %H:%M (%A)")
+    primeira_mensagem = len(historico) == 0
+
+    identidade = (
+        f"Seu nome é {profissional['nome_secretaria']} e você é a secretária de agendamento de "
+        f"{profissional['nome']}"
+        if profissional["nome_secretaria"]
+        else f"Você é a secretária de agendamento de {profissional['nome']}"
+    )
 
     system_prompt = (
-        f"Você é a secretária de agendamento de {profissional['nome']}, respondendo pelo WhatsApp "
-        f"a um paciente. Seja formal e profissional, como uma secretária de consultório de "
-        f"verdade — cordial e atenciosa, mas sem intimidade, sem gírias e sem emojis. Em "
-        f"português do Brasil.\n"
+        f"{identidade}, respondendo pelo WhatsApp a um paciente. Seja formal e profissional, "
+        f"como uma secretária de consultório de verdade — cordial e atenciosa, mas sem "
+        f"intimidade, sem gírias e sem emojis. Em português do Brasil.\n"
         f"Agora é {agora_str} (horário de Brasília).\n"
         f"Locais de atendimento disponíveis: {nomes_locais}.\n"
-        "Conduza a conversa aos poucos: prefira perguntas abertas (ex: 'prefere de manhã ou fim "
+        + (
+            f"O valor da consulta é R$ {profissional['valor_consulta']:.2f}. Informe esse valor "
+            "quando perguntarem, ou ao apresentar os horários pra um paciente novo. Nunca invente "
+            "um valor diferente desse.\n"
+            if profissional["valor_consulta"] is not None
+            else ""
+        )
+        + (
+            f"Essa é a primeira mensagem dessa conversa — se apresente pelo nome "
+            f"({profissional['nome_secretaria']}) e pergunte se a pessoa já é paciente de "
+            f"{profissional['nome']}, antes de seguir com qualquer outra coisa.\n"
+            if primeira_mensagem and profissional["nome_secretaria"]
+            else ""
+        )
+        + "Conduza a conversa aos poucos: prefira perguntas abertas (ex: 'prefere de manhã ou fim "
         "de tarde?') a listar de uma vez tudo que falta (nome, local, modalidade, data). Peça uma "
         "coisa de cada vez, na ordem que fizer sentido pra conversa.\n"
         "\n"
@@ -767,7 +816,15 @@ async def processar_mensagem(
         "a reserva ativa desse paciente).\n"
         "- Se consultar_horarios_disponiveis não achar nada bom pro que o paciente quer (ex: dia "
         "lotado), ofereça entrar na lista de espera com entrar_lista_espera em vez de só dizer que "
-        "não tem horário.\n"
+        "não tem horário. Pra paciente NOVO nessa situação, recomende agendar o próximo horário "
+        "realmente disponível E entrar na lista de espera ao mesmo tempo (não é ou um ou outro) — "
+        "assim ele já garante uma consulta e ainda pode ser chamado antes se abrir vaga melhor.\n"
+        "- Se um paciente que JÁ TEM CADASTRO pedir um horário mais próximo do que os disponíveis, "
+        "use solicitar_horario_especial (não invente nem prometa um horário de verdade) e diga que "
+        "vai consultar a possibilidade com a profissional e retornar em até 24 horas.\n"
+        "- Ao confirmar um agendamento (depois de criar_agendamento, segurar_horario ou "
+        "confirmar_horario_reservado), sempre inclua no resumo o pedido de avisar com 48 horas de "
+        "antecedência em caso de imprevisto/cancelamento.\n"
         "- NUNCA invente urgência (frases genéricas tipo 'os horários estão acabando rápido' sem "
         "isso ser verdade). A pressão real já vem do prazo de expiração do hold e da lista de "
         "espera em si — não precisa exagerar.\n"
@@ -796,7 +853,16 @@ async def processar_mensagem(
         "você?' em vez de 'Isso serve pra você?' ou 'Funciona para você?'.\n"
         "- SEMPRE chame acolher_e_escalar imediatamente (sem tentar ajudar você mesmo) se o paciente "
         "relatar uma situação de crise ou pedir algo fora do escopo de agendamento (conselho "
-        "clínico, diagnóstico, etc.)."
+        "clínico, diagnóstico, etc.).\n"
+        + (
+            "- Se um paciente ANTIGO (já tem cadastro) perguntar sobre desconto, responda "
+            "exatamente nesse espírito: sim, dependendo da forma de pagamento e dos tratamentos "
+            f"que ele fizer a profissional pode dar desconto, mas isso é decidido diretamente com "
+            f"ela na consulta — o valor de tabela desse ano é R$ {profissional['valor_consulta']:.2f}. "
+            "Nunca prometa um valor de desconto específico, isso não é seu papel.\n"
+            if profissional["valor_consulta"] is not None
+            else ""
+        )
     )
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
