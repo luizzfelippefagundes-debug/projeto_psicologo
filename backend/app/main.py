@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, EmailStr
 
-from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, ia, icloud_calendar, lembretes, notificacoes, plaud, reservas
+from app import agendamento_publico, anamnese, auth, bot, db, evolution, google_calendar, ia, icloud_calendar, lembretes, notificacoes, plaud, reengajamento, reservas
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -29,11 +29,13 @@ async def lifespan(app: FastAPI):
     tarefa_holds = asyncio.create_task(reservas.loop_expiracao_holds())
     tarefa_google_sync = asyncio.create_task(google_calendar.loop_sincronizacao())
     tarefa_icloud_sync = asyncio.create_task(icloud_calendar.loop_sincronizacao())
+    tarefa_reengajamento = asyncio.create_task(reengajamento.loop_reengajamento())
     yield
     tarefa_lembretes.cancel()
     tarefa_holds.cancel()
     tarefa_google_sync.cancel()
     tarefa_icloud_sync.cancel()
+    tarefa_reengajamento.cancel()
     await db.disconnect()
 
 
@@ -1516,7 +1518,8 @@ async def webhook_whatsapp(request: Request):
                 DO UPDATE SET
                     historico = $4::jsonb,
                     nome_whatsapp = COALESCE($3, bot_conversas.nome_whatsapp),
-                    atualizado_em = now()
+                    atualizado_em = now(),
+                    nudge_enviado = false
                 """,
                 profissional_id, telefone_paciente, push_name, json.dumps(novo_historico),
             )
