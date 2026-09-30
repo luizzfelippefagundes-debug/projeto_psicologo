@@ -30,6 +30,10 @@ const ABAS: [Aba, string][] = [
   ["transcricao", "Transcrição"],
 ];
 
+function rotuloOrdenacao(g: PlaudGravacaoLista): string {
+  return g.titulo || formatDataHoraBrasilia(g.gravado_em ?? g.recebido_em);
+}
+
 function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
   const mapa = new Map<string, Grupo>();
   for (const g of gravacoes) {
@@ -38,6 +42,11 @@ function agruparPorPaciente(gravacoes: PlaudGravacaoLista[]): Grupo[] {
       mapa.set(chave, { chave, nome: g.paciente_nome ?? "Não vinculadas", gravacoes: [] });
     }
     mapa.get(chave)!.gravacoes.push(g);
+  }
+  // Dentro de cada pasta, gravações em ordem alfabética pelo título — mais fácil
+  // de achar uma gravação específica do que por data de recebimento.
+  for (const grupo of mapa.values()) {
+    grupo.gravacoes.sort((a, b) => rotuloOrdenacao(a).localeCompare(rotuloOrdenacao(b), "pt-BR"));
   }
   // Pastas em ordem alfabética pelo nome do paciente, pra achar mais fácil — só a
   // pasta "Não vinculadas" foge disso e vai sempre pro topo, por precisar de ação.
