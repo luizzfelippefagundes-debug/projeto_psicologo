@@ -103,6 +103,58 @@ async def verificar_e_enviar_pos_consulta() -> None:
             logger.info("Mensagem pós-consulta enviada pra sessão %s", sessao["id"])
 
 
+async def verificar_e_enviar_aniversarios() -> None:
+    """Envia mensagem de parabéns no WhatsApp no dia do aniversário do paciente.
+    Roda diariamente: um único envio por paciente por ano (coluna aniversario_enviado_ano).
+    """
+    agora = datetime.now(timezone.utc)
+    # Converte pra horário de Brasília pra pegar o dia/mês correto
+    from zoneinfo import ZoneInfo
+    brasilia = ZoneInfo("America/Sao_Paulo")
+    hoje = agora.astimezone(brasilia)
+    dia_hoje = hoje.day
+    mes_hoje = hoje.month
+    ano_hoje = hoje.year
+
+    async with db.pool.acquire() as conn:
+        pacientes = await conn.fetch(
+            """
+            SELECT p.id, p.nome, p.telefone, p.data_nascimento,
+                   p.aniversario_enviado_ano,
+                   pr.whatsapp_instance
+            FROM pacientes p
+            JOIN profissionais pr ON pr.id = p.profissional_id
+            WHERE p.status = 'ativo'
+              AND p.data_nascimento IS NOT NULL
+              AND EXTRACT(MONTH FROM p.data_nascimento) = $1
+              AND EXTRACT(DAY FROM p.data_nascimento) = $2
+              AND (p.aniversario_enviado_ano IS NULL OR p.aniversario_enviado_ano < $3)
+              AND pr.whatsapp_instance IS NOT NULL
+            """,
+            mes_hoje, dia_hoje, ano_hoje,
+        )
+
+        for paciente in pacientes:
+            primeiro_nome = paciente["nome"].split(" ")[0]
+            mensagem = (
+                f"Feliz aniversário, {primeiro_nome}! 🎉 "
+                "Que esse novo ano de vida seja repleto de saúde, alegria e conquistas. "
+                "É um prazer cuidar de você!"
+            )
+            try:
+                await evolution.enviar_mensagem_texto(
+                    paciente["whatsapp_instance"], paciente["telefone"], mensagem
+                )
+            except Exception:
+                logger.exception("Falha ao enviar parabéns (paciente=%s)", paciente["id"])
+                continue
+            await conn.execute(
+                "UPDATE pacientes SET aniversario_enviado_ano = $1 WHERE id = $2",
+                ano_hoje, paciente["id"],
+            )
+            logger.info("Parabéns enviado pro paciente %s", paciente["id"])
+
+
 async def loop_lembretes() -> None:
     while True:
         try:
@@ -113,4 +165,8 @@ async def loop_lembretes() -> None:
             await verificar_e_enviar_pos_consulta()
         except Exception:
             logger.exception("Erro ao verificar mensagens pós-consulta")
+        try:
+            await verificar_e_enviar_aniversarios()
+        except Exception:
+            logger.exception("Erro ao verificar aniversários")
         await asyncio.sleep(INTERVALO_VERIFICACAO.total_seconds())

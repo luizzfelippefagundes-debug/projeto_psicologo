@@ -279,7 +279,7 @@ async def listar_pacientes(profissional_id: int = Depends(auth.get_current_profi
         rows = await conn.fetch(
             """
             SELECT p.id, p.nome, p.telefone, p.email, p.data_nascimento, p.tipo_atendimento, p.tipo_procedimento, p.status, p.criado_em,
-                   p.consentimento_lgpd, p.consentimento_lgpd_data,
+                   p.consentimento_lgpd, p.consentimento_lgpd_data, p.tags, p.anotacoes,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
@@ -319,6 +319,7 @@ class PacienteBody(BaseModel):
     tipo_atendimento: str = "individual"
     tipo_procedimento: str
     consentimento_lgpd: bool = False
+    tags: list[str] = []
 
 
 class PacienteUpdateBody(BaseModel):
@@ -330,6 +331,8 @@ class PacienteUpdateBody(BaseModel):
     tipo_procedimento: str | None = None
     status: str | None = None
     consentimento_lgpd: bool | None = None
+    tags: list[str] | None = None
+    anotacoes: str | None = None
 
 
 @app.post("/pacientes", status_code=status.HTTP_201_CREATED)
@@ -358,14 +361,14 @@ async def criar_paciente(body: PacienteBody, profissional_id: int = Depends(auth
             """
             INSERT INTO pacientes (
                 profissional_id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento,
-                consentimento_lgpd, consentimento_lgpd_data
+                consentimento_lgpd, consentimento_lgpd_data, tags
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, true, now())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, now(), $8)
             RETURNING id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento, status, criado_em,
-                      consentimento_lgpd, consentimento_lgpd_data
+                      consentimento_lgpd, consentimento_lgpd_data, tags, anotacoes
             """,
             profissional_id, body.nome, body.telefone, body.email, body.data_nascimento,
-            body.tipo_atendimento, body.tipo_procedimento,
+            body.tipo_atendimento, body.tipo_procedimento, body.tags,
         )
     return dict(row)
 
@@ -414,13 +417,16 @@ async def editar_paciente(
                     WHEN $9 = true AND consentimento_lgpd_data IS NULL THEN now()
                     ELSE consentimento_lgpd_data
                 END,
-                data_nascimento = COALESCE($10, data_nascimento)
+                data_nascimento = COALESCE($10, data_nascimento),
+                tags = COALESCE($11, tags),
+                anotacoes = COALESCE($12, anotacoes)
             WHERE id = $7 AND profissional_id = $8
             RETURNING id, nome, telefone, email, data_nascimento, tipo_atendimento, tipo_procedimento, status, criado_em,
-                      consentimento_lgpd, consentimento_lgpd_data
+                      consentimento_lgpd, consentimento_lgpd_data, tags, anotacoes
             """,
             body.nome, body.telefone, body.email, body.tipo_atendimento, body.tipo_procedimento, body.status,
             paciente_id, profissional_id, body.consentimento_lgpd, body.data_nascimento,
+            body.tags, body.anotacoes,
         )
     return dict(row)
 
@@ -446,7 +452,7 @@ async def obter_paciente(paciente_id: int, profissional_id: int = Depends(auth.g
         row = await conn.fetchrow(
             """
             SELECT p.id, p.nome, p.telefone, p.email, p.data_nascimento, p.tipo_atendimento, p.tipo_procedimento,
-                   p.status, p.criado_em, p.consentimento_lgpd, p.consentimento_lgpd_data,
+                   p.status, p.criado_em, p.consentimento_lgpd, p.consentimento_lgpd_data, p.tags, p.anotacoes,
                    prox.data_hora AS proxima_sessao
             FROM pacientes p
             LEFT JOIN LATERAL (
@@ -1632,6 +1638,64 @@ async def resolver_conversa_escalonada(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Não encontrado")
     return dict(row)
+
+
+@app.get("/pacientes/{paciente_id}/laudos")
+async def listar_laudos_paciente(
+    paciente_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        existe = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+        if existe is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+        rows = await conn.fetch(
+            "SELECT id, nome, url, tamanho_bytes, criado_em FROM laudos WHERE paciente_id = $1 ORDER BY criado_em DESC",
+            paciente_id,
+        )
+    return [dict(row) for row in rows]
+
+
+class LaudoBody(BaseModel):
+    nome: str
+    url: str
+    tamanho_bytes: int | None = None
+
+
+@app.post("/pacientes/{paciente_id}/laudos", status_code=status.HTTP_201_CREATED)
+async def criar_laudo(
+    paciente_id: int,
+    body: LaudoBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    async with db.pool.acquire() as conn:
+        existe = await conn.fetchval(
+            "SELECT id FROM pacientes WHERE id = $1 AND profissional_id = $2", paciente_id, profissional_id
+        )
+        if existe is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+        row = await conn.fetchrow(
+            """
+            INSERT INTO laudos (profissional_id, paciente_id, nome, url, tamanho_bytes)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, nome, url, tamanho_bytes, criado_em
+            """,
+            profissional_id, paciente_id, body.nome, body.url, body.tamanho_bytes,
+        )
+    return dict(row)
+
+
+@app.delete("/laudos/{laudo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def excluir_laudo(
+    laudo_id: int, profissional_id: int = Depends(auth.get_current_profissional_id)
+):
+    async with db.pool.acquire() as conn:
+        resultado = await conn.execute(
+            "DELETE FROM laudos WHERE id = $1 AND profissional_id = $2", laudo_id, profissional_id
+        )
+    if resultado == "DELETE 0":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Laudo não encontrado")
 
 
 @app.get("/contatos-bot")

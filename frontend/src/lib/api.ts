@@ -172,3 +172,15 @@ export function getPacientesAnamnese() {
 export function getAnamnesePaciente(id: number) {
   return apiFetch<AnamneseDetalhe>(`/pacientes/${id}/anamnese`);
 }
+
+export type Laudo = {
+  id: number;
+  nome: string;
+  url: string;
+  tamanho_bytes: number | null;
+  criado_em: string;
+};
+
+export function getLaudosPaciente(id: number) {
+  return apiFetch<Laudo[]>(`/pacientes/${id}/laudos`);
+}

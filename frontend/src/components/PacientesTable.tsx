@@ -27,6 +27,8 @@ type FormState = {
   tipoProcedimento: string;
   status: "ativo" | "inativo";
   consentimentoLgpd: boolean;
+  tags: string[];
+  tagInput: string;
 };
 
 function pacienteParaFormState(paciente: Paciente): FormState {
@@ -39,6 +41,8 @@ function pacienteParaFormState(paciente: Paciente): FormState {
     tipoProcedimento: paciente.tipo_procedimento ?? "",
     status: paciente.status,
     consentimentoLgpd: paciente.consentimento_lgpd,
+    tags: paciente.tags ?? [],
+    tagInput: "",
   };
 }
 
@@ -52,6 +56,8 @@ function formStateVazio(): FormState {
     tipoProcedimento: "",
     status: "ativo",
     consentimentoLgpd: false,
+    tags: [],
+    tagInput: "",
   };
 }
 
@@ -282,9 +288,17 @@ function PacientesCard({
   onSelecionar: (paciente: Paciente) => void;
   onEditar: (paciente: Paciente) => void;
 }) {
-  const filtrados = pacientes.filter((p) =>
-    p.nome.toLowerCase().includes(busca.toLowerCase())
-  );
+  const [tagFiltro, setTagFiltro] = useState<string | null>(null);
+
+  const todasTags = Array.from(
+    new Set(pacientes.flatMap((p) => p.tags ?? []))
+  ).sort();
+
+  const filtrados = pacientes.filter((p) => {
+    const matchNome = p.nome.toLowerCase().includes(busca.toLowerCase());
+    const matchTag = tagFiltro === null || (p.tags ?? []).includes(tagFiltro);
+    return matchNome && matchTag;
+  });
 
   return (
     <div className="rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
@@ -301,6 +315,35 @@ function PacientesCard({
           />
         </div>
       </div>
+      {todasTags.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b border-border px-6 py-3">
+          <button
+            type="button"
+            onClick={() => setTagFiltro(null)}
+            className={`rounded-full px-3 py-1 text-[12px] font-bold transition-colors ${
+              tagFiltro === null
+                ? "bg-accent text-white"
+                : "bg-accent-soft text-muted hover:text-fg"
+            }`}
+          >
+            Todas
+          </button>
+          {todasTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setTagFiltro(tagFiltro === tag ? null : tag)}
+              className={`rounded-full px-3 py-1 text-[12px] font-bold transition-colors ${
+                tagFiltro === tag
+                  ? "bg-accent text-white"
+                  : "bg-accent-soft text-muted hover:text-fg"
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filtrados.length === 0 ? (
         <p className="px-6 py-8 text-center text-[14px] text-muted">Nenhum paciente encontrado.</p>
@@ -323,6 +366,18 @@ function PacientesCard({
                     <div className="truncate text-[12.5px] text-muted">
                       {p.telefone} · {labelProcedimento(p.tipo_procedimento)}
                     </div>
+                    {(p.tags ?? []).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {p.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-bold text-accent-dark"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
@@ -354,7 +409,7 @@ function PacientesCard({
             <table className="w-full min-w-[760px] border-collapse">
               <thead>
                 <tr>
-                  {["Paciente", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map(
+                  {["Paciente", "Tags", "Telefone", "Tipo", "Procedimento", "Próxima sessão", "Status"].map(
                     (col) => (
                       <th
                         key={col}
@@ -379,6 +434,18 @@ function PacientesCard({
                           {iniciais(p.nome)}
                         </div>
                         {p.nome}
+                      </div>
+                    </td>
+                    <td className="border-b border-border px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(p.tags ?? []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11.5px] font-bold text-accent-dark"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </td>
                     <td className="border-b border-border px-6 py-4 text-[14.5px] text-muted">
@@ -490,6 +557,7 @@ export function PacientesTable({
       data_nascimento: form.dataNascimento || null,
       tipo_atendimento: form.tipoAtendimento,
       consentimento_lgpd: form.consentimentoLgpd,
+      tags: form.tags,
     };
     if (form.tipoProcedimento) {
       payload.tipo_procedimento = form.tipoProcedimento;
@@ -720,6 +788,51 @@ export function PacientesTable({
                 />
               </div>
             )}
+          </div>
+
+          <div className="flex flex-col">
+            <label className="mb-1.5 text-sm font-semibold">Palavras-chave</label>
+            <div className="flex flex-wrap gap-1.5 rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-3 py-2.5 focus-within:border-accent">
+              {form.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-[12px] font-bold text-white"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, tags: form.tags.filter((t) => t !== tag) })}
+                    className="ml-0.5 opacity-70 hover:opacity-100"
+                    aria-label={`Remover ${tag}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={form.tagInput}
+                onChange={(e) => setForm({ ...form, tagInput: e.target.value })}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === ",") && form.tagInput.trim()) {
+                    e.preventDefault();
+                    const nova = form.tagInput.trim().toLowerCase();
+                    if (!form.tags.includes(nova)) {
+                      setForm({ ...form, tags: [...form.tags, nova], tagInput: "" });
+                    } else {
+                      setForm({ ...form, tagInput: "" });
+                    }
+                  } else if (e.key === "Backspace" && !form.tagInput && form.tags.length > 0) {
+                    setForm({ ...form, tags: form.tags.slice(0, -1) });
+                  }
+                }}
+                placeholder={form.tags.length === 0 ? "Digite e pressione Enter..." : ""}
+                className="min-w-[140px] flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-muted"
+              />
+            </div>
+            <p className="mt-1 text-[11.5px] text-muted">
+              Ex: tdcs, ansiedade, adolescente — pressione Enter ou vírgula pra adicionar
+            </p>
           </div>
 
           {pacienteEditando?.consentimento_lgpd ? (

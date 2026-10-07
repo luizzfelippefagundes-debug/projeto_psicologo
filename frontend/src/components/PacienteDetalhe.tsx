@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamneseSchema";
-import type { PlaudGravacaoPaciente } from "@/lib/api";
+import type { Laudo, PlaudGravacaoPaciente } from "@/lib/api";
 import { PlaudHistoricoPaciente } from "@/components/PlaudHistoricoPaciente";
+import { LaudosTab } from "@/components/LaudosTab";
 import {
   formatDataHoraBrasilia,
   iniciais,
@@ -13,7 +14,10 @@ import {
   type SessaoHistorico,
 } from "@/lib/format";
 
-const ABAS = ["Visão geral", "Histórico de sessões", "Plaud", "Anamnese"] as const;
+const API_URL = "/api";
+const ANOTACOES_MAX = 3000;
+
+const ABAS = ["Visão geral", "Histórico de sessões", "Plaud", "Anamnese", "Laudos", "Anotações"] as const;
 type Aba = (typeof ABAS)[number];
 
 const STATUS_SESSAO_LABEL: Record<string, string> = {
@@ -29,13 +33,30 @@ export function PacienteDetalhe({
   sessoes,
   anamnese,
   gravacoesPlaud,
+  laudos,
 }: {
   paciente: Paciente;
   sessoes: SessaoHistorico[];
   anamnese: AnamneseDetalhe;
   gravacoesPlaud: PlaudGravacaoPaciente[];
+  laudos: Laudo[];
 }) {
   const [aba, setAba] = useState<Aba>("Visão geral");
+  const [anotacoes, setAnotacoes] = useState(paciente.anotacoes ?? "");
+  const [salvandoAnotacoes, setSalvandoAnotacoes] = useState(false);
+  const [anotacoesSalvas, setAnotacoesSalvas] = useState(true);
+
+  async function salvarAnotacoes() {
+    setSalvandoAnotacoes(true);
+    await fetch(`${API_URL}/pacientes/${paciente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ anotacoes: anotacoes || null }),
+    });
+    setSalvandoAnotacoes(false);
+    setAnotacoesSalvas(true);
+  }
 
   return (
     <div>
@@ -76,6 +97,18 @@ export function PacienteDetalhe({
             valor={paciente.proxima_sessao ? formatDataHoraBrasilia(paciente.proxima_sessao) : "—"}
           />
         </div>
+        {(paciente.tags ?? []).length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {paciente.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold text-accent-dark"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mb-5 flex gap-2 overflow-x-auto border-b border-border">
@@ -156,6 +189,50 @@ export function PacienteDetalhe({
       )}
 
       {aba === "Plaud" && <PlaudHistoricoPaciente gravacoes={gravacoesPlaud} />}
+
+      {aba === "Laudos" && (
+        <LaudosTab pacienteId={paciente.id} laudosIniciais={laudos} />
+      )}
+
+      {aba === "Anotações" && (
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <h2 className="text-[16px] font-bold">Anotações</h2>
+            <div className="flex items-center gap-3">
+              <span className={`text-[12px] ${anotacoes.length > ANOTACOES_MAX ? "text-red-600 font-bold" : "text-muted"}`}>
+                {anotacoes.length}/{ANOTACOES_MAX}
+              </span>
+              {!anotacoesSalvas && (
+                <button
+                  type="button"
+                  onClick={salvarAnotacoes}
+                  disabled={salvandoAnotacoes || anotacoes.length > ANOTACOES_MAX}
+                  className="rounded-xl bg-accent px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
+                >
+                  {salvandoAnotacoes ? "Salvando..." : "Salvar"}
+                </button>
+              )}
+              {anotacoesSalvas && anotacoes === (paciente.anotacoes ?? "") && (
+                <span className="text-[12.5px] text-muted">Salvo</span>
+              )}
+            </div>
+          </div>
+          <textarea
+            value={anotacoes}
+            onChange={(e) => {
+              setAnotacoes(e.target.value);
+              setAnotacoesSalvas(false);
+            }}
+            placeholder="Anotações clínicas, observações ou lembretes sobre esse paciente..."
+            rows={12}
+            maxLength={ANOTACOES_MAX + 100}
+            className="w-full resize-y rounded-xl border-[1.5px] border-border bg-[var(--color-accent-soft)] px-4 py-3 text-[14px] leading-relaxed outline-none focus:border-accent placeholder:text-muted"
+          />
+          <p className="mt-2 text-[12px] text-muted">
+            Visível somente pra você. Máximo de {ANOTACOES_MAX.toLocaleString("pt-BR")} caracteres.
+          </p>
+        </div>
+      )}
 
       {aba === "Anamnese" && (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">

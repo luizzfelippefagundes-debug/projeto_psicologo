@@ -11,6 +11,8 @@ export type Paciente = {
   proxima_sessao: string | null;
   consentimento_lgpd: boolean;
   consentimento_lgpd_data: string | null;
+  tags: string[];
+  anotacoes: string | null;
 };
 
 export const PROCEDIMENTOS = [

@@ -24,6 +24,21 @@ const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão n
 const HORA_INICIO_PADRAO = 7;
 const HORA_FIM_PADRAO = 20; // 07:00 .. 20:00 quando não há nada fora dessa janela
 
+const CORES_LOCAL = [
+  "#7C3AED", // roxo (accent padrão)
+  "#0ea5e9", // azul
+  "#f59e0b", // âmbar
+  "#10b981", // verde
+  "#ec4899", // rosa
+  "#f97316", // laranja
+  "#06b6d4", // ciano
+];
+
+function corDoLocal(localId: number, locais: Local[]): string {
+  const idx = locais.findIndex((l) => l.id === localId);
+  return CORES_LOCAL[(idx < 0 ? 0 : idx) % CORES_LOCAL.length];
+}
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -431,10 +446,25 @@ export function AgendaList({
     router.refresh();
   }
 
+  const locaisNoDia = locais.filter((l) =>
+    sessoes.some((s) => s.local_id === l.id)
+  );
+
   return (
     <>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <p className="text-[13px] text-muted">Toque num horário livre pra criar uma sessão</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {locais.length > 1 &&
+            locais.map((l) => (
+              <span key={l.id} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted">
+                <span
+                  className="inline-block h-3 w-3 rounded-full"
+                  style={{ backgroundColor: corDoLocal(l.id, locais) }}
+                />
+                {l.nome}
+              </span>
+            ))}
+        </div>
         <button
           type="button"
           onClick={() => abrirCriacao()}
@@ -450,10 +480,24 @@ export function AgendaList({
           const pos = posicaoDoSlot(sessoes, bloqueios, horaLabel, diaISO);
 
           if (pos.tipo === "sessao-continuacao" || pos.tipo === "bloqueio-continuacao") {
+            // determina a cor da sessão/bloqueio que está em andamento nesse slot
+            let corContinuacao: string | undefined;
+            if (pos.tipo === "sessao-continuacao") {
+              const sessaoAtiva = sessoes.find((s) => {
+                const { minutos: ini } = partesBrasilia(s.data_hora);
+                const [hs, ms] = horaLabel.split(":").map(Number);
+                const slotMin = hs * 60 + ms;
+                return slotMin > ini && slotMin < ini + s.duracao_minutos;
+              });
+              if (sessaoAtiva) corContinuacao = corDoLocal(sessaoAtiva.local_id, locais);
+            }
             return (
               <div
                 key={horaLabel}
-                className="flex items-center gap-2 border-b border-border px-5 py-2 text-[12px] text-muted last:border-0"
+                className="flex items-center gap-2 border-b border-border py-2 pr-5 text-[12px] text-muted last:border-0"
+                style={corContinuacao
+                  ? { borderLeft: `4px solid ${corContinuacao}`, paddingLeft: "calc(1.25rem - 4px)" }
+                  : { paddingLeft: "1.25rem" }}
               >
                 <span className="w-12 shrink-0 font-semibold">{horaLabel}</span>
                 <span>↳ continuação do horário anterior</span>
@@ -475,10 +519,12 @@ export function AgendaList({
                 : sessao.status === "concluida"
                   ? "Concluída"
                   : "Não compareceu";
+            const cor = corDoLocal(sessao.local_id, locais);
             return (
               <div
                 key={horaLabel}
-                className="flex w-full items-center gap-3 border-b border-border px-5 py-3.5 transition-colors last:border-0 hover:bg-accent-soft/40"
+                className="flex w-full items-center gap-3 border-b border-border py-3.5 pr-5 transition-colors last:border-0 hover:bg-accent-soft/40"
+                style={{ borderLeft: `4px solid ${cor}`, paddingLeft: "calc(1.25rem - 4px)" }}
               >
                 <button
                   type="button"
