@@ -105,6 +105,8 @@ services:
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - N8N_RUNNERS_ENABLED=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=https,http,url
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
