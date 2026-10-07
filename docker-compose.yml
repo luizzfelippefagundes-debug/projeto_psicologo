@@ -104,6 +104,7 @@ services:
       - N8N_TRUST_PROXY=true
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - N8N_RUNNERS_ENABLED=false
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
