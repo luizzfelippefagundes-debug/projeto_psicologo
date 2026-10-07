@@ -45,6 +45,8 @@ export function PacienteDetalhe({
   const [anotacoes, setAnotacoes] = useState(paciente.anotacoes ?? "");
   const [salvandoAnotacoes, setSalvandoAnotacoes] = useState(false);
   const [anotacoesSalvas, setAnotacoesSalvas] = useState(true);
+  const [tags, setTags] = useState<string[]>(paciente.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
 
   async function salvarAnotacoes() {
     setSalvandoAnotacoes(true);
@@ -56,6 +58,31 @@ export function PacienteDetalhe({
     });
     setSalvandoAnotacoes(false);
     setAnotacoesSalvas(true);
+  }
+
+  async function adicionarTag(tag: string) {
+    const nova = tag.trim();
+    if (!nova || tags.includes(nova)) return;
+    const novas = [...tags, nova];
+    setTags(novas);
+    setTagInput("");
+    await fetch(`${API_URL}/pacientes/${paciente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ tags: novas }),
+    });
+  }
+
+  async function removerTag(tag: string) {
+    const novas = tags.filter((t) => t !== tag);
+    setTags(novas);
+    await fetch(`${API_URL}/pacientes/${paciente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ tags: novas }),
+    });
   }
 
   return (
@@ -97,18 +124,42 @@ export function PacienteDetalhe({
             valor={paciente.proxima_sessao ? formatDataHoraBrasilia(paciente.proxima_sessao) : "—"}
           />
         </div>
-        {(paciente.tags ?? []).length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {paciente.tags.map((tag) => (
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-[12px] font-semibold text-muted">Palavras-chave</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold text-accent-dark"
+                className="flex items-center gap-1 rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold text-accent-dark"
               >
                 {tag}
+                <button
+                  type="button"
+                  onClick={() => removerTag(tag)}
+                  className="ml-0.5 text-accent-dark/60 hover:text-accent-dark"
+                >
+                  ×
+                </button>
               </span>
             ))}
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  adicionarTag(tagInput);
+                } else if (e.key === "Backspace" && !tagInput && tags.length > 0) {
+                  removerTag(tags[tags.length - 1]);
+                }
+              }}
+              onBlur={() => { if (tagInput.trim()) adicionarTag(tagInput); }}
+              placeholder={tags.length === 0 ? "Adicionar palavra-chave..." : "+"}
+              className="min-w-[120px] bg-transparent text-[12.5px] text-fg placeholder:text-muted focus:outline-none"
+            />
           </div>
-        )}
+        </div>
       </div>
 
       <div className="relative mb-5">
