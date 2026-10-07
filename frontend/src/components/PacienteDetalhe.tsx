@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CAMPOS_ADULTO, CAMPOS_INFANTIL, type CampoAnamnese } from "@/lib/anamneseSchema";
 import type { Laudo, PlaudGravacaoPaciente } from "@/lib/api";
 import { PlaudHistoricoPaciente } from "@/components/PlaudHistoricoPaciente";
@@ -47,6 +47,8 @@ export function PacienteDetalhe({
   const [anotacoesSalvas, setAnotacoesSalvas] = useState(true);
   const [tags, setTags] = useState<string[]>(paciente.tags ?? []);
   const [tagInput, setTagInput] = useState("");
+  const [adicionandoTag, setAdicionandoTag] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   async function salvarAnotacoes() {
     setSalvandoAnotacoes(true);
@@ -124,25 +126,25 @@ export function PacienteDetalhe({
             valor={paciente.proxima_sessao ? formatDataHoraBrasilia(paciente.proxima_sessao) : "—"}
           />
         </div>
-        <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-2 text-[12px] font-semibold text-muted">Palavras-chave</p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="flex items-center gap-1 rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold text-accent-dark"
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-4">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="flex items-center gap-1 rounded-full bg-accent-soft px-3 py-1 text-[12px] font-bold text-accent-dark"
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => removerTag(tag)}
+                className="ml-0.5 leading-none text-accent-dark/50 hover:text-accent-dark"
               >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removerTag(tag)}
-                  className="ml-0.5 text-accent-dark/60 hover:text-accent-dark"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+                ×
+              </button>
+            </span>
+          ))}
+          {adicionandoTag ? (
             <input
+              ref={tagInputRef}
               type="text"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
@@ -150,15 +152,31 @@ export function PacienteDetalhe({
                 if (e.key === "Enter" || e.key === ",") {
                   e.preventDefault();
                   adicionarTag(tagInput);
-                } else if (e.key === "Backspace" && !tagInput && tags.length > 0) {
-                  removerTag(tags[tags.length - 1]);
+                  setAdicionandoTag(false);
+                } else if (e.key === "Escape") {
+                  setTagInput("");
+                  setAdicionandoTag(false);
                 }
               }}
-              onBlur={() => { if (tagInput.trim()) adicionarTag(tagInput); }}
-              placeholder={tags.length === 0 ? "Adicionar palavra-chave..." : "+"}
-              className="min-w-[120px] bg-transparent text-[12.5px] text-fg placeholder:text-muted focus:outline-none"
+              onBlur={() => {
+                if (tagInput.trim()) adicionarTag(tagInput);
+                setAdicionandoTag(false);
+                setTagInput("");
+              }}
+              placeholder="Palavra-chave..."
+              autoFocus
+              className="w-36 rounded-full border border-accent bg-transparent px-3 py-1 text-[12px] focus:outline-none"
             />
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAdicionandoTag(true)}
+              title="Adicionar palavra-chave"
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-muted text-[14px] font-bold text-muted hover:border-accent hover:text-accent"
+            >
+              +
+            </button>
+          )}
         </div>
       </div>
 
