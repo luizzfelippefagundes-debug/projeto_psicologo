@@ -18,16 +18,16 @@ export default async function PacienteDetalhePage({
   let gravacoesPlaud;
   let laudos;
   try {
-    [paciente, sessoes, anamnese, gravacoesPlaud, laudos] = await Promise.all([
+    [paciente, sessoes, anamnese, gravacoesPlaud] = await Promise.all([
       getPaciente(pacienteId),
       getSessoesPaciente(pacienteId),
       getAnamnesePaciente(pacienteId),
       getGravacoesPlaudPaciente(pacienteId),
-      getLaudosPaciente(pacienteId),
     ]);
   } catch {
     notFound();
   }
+  laudos = await getLaudosPaciente(pacienteId).catch(() => []);
 
   return (
     <div>

@@ -128,6 +128,79 @@ async def logout(response: Response):
     return {"status": "ok"}
 
 
+class EsqueciSenhaBody(BaseModel):
+    email: EmailStr
+
+
+class RedefinirSenhaBody(BaseModel):
+    token: str
+    nova_senha: str
+
+
+@app.post("/auth/esqueci-senha", status_code=status.HTTP_204_NO_CONTENT)
+async def esqueci_senha(body: EsqueciSenhaBody):
+    import resend
+    from datetime import timedelta
+
+    resend.api_key = settings.resend_api_key
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, nome FROM profissionais WHERE email = $1", body.email
+        )
+    if row is None:
+        return  # não revela se o e-mail existe
+
+    token = secrets.token_urlsafe(32)
+    expira_em = datetime.now(BRASILIA) + timedelta(hours=2)
+    async with db.pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO reset_senha_tokens (token, profissional_id, expira_em)
+            VALUES ($1, $2, $3)
+            """,
+            token, row["id"], expira_em,
+        )
+
+    link = f"{settings.frontend_url}/redefinir-senha?token={token}"
+    resend.Emails.send({
+        "from": "Consultório <noreply@nexosystem.online>",
+        "to": body.email,
+        "subject": "Redefinição de senha",
+        "html": f"""
+        <p>Olá, {row['nome']}!</p>
+        <p>Clique no link abaixo para redefinir sua senha. O link expira em 2 horas.</p>
+        <p><a href="{link}">{link}</a></p>
+        <p>Se você não solicitou isso, ignore este e-mail.</p>
+        """,
+    })
+
+
+@app.post("/auth/redefinir-senha", status_code=status.HTTP_204_NO_CONTENT)
+async def redefinir_senha(body: RedefinirSenhaBody):
+    if len(body.nova_senha) < 6:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Senha deve ter no mínimo 6 caracteres")
+
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT profissional_id, expira_em, usado
+            FROM reset_senha_tokens
+            WHERE token = $1
+            """,
+            body.token,
+        )
+        if row is None or row["usado"] or row["expira_em"] < datetime.now(BRASILIA):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Link inválido ou expirado")
+
+        await conn.execute(
+            "UPDATE profissionais SET senha_hash = $1 WHERE id = $2",
+            auth.hash_senha(body.nova_senha), row["profissional_id"],
+        )
+        await conn.execute(
+            "UPDATE reset_senha_tokens SET usado = TRUE WHERE token = $1", body.token
+        )
+
+
 @app.get("/auth/me")
 async def me(profissional_id: int = Depends(auth.get_current_profissional_id)):
     async with db.pool.acquire() as conn:
@@ -1551,6 +1624,32 @@ async def google_callback(code: str, state: str):
     tokens = await google_calendar.trocar_code_por_tokens(code)
     await google_calendar.salvar_conexao(profissional_id, tokens)
     return RedirectResponse(f"{settings.frontend_url}/configuracoes?google=conectado")
+
+
+@app.get("/whatsapp/status")
+async def whatsapp_status(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        instance = await conn.fetchval(
+            "SELECT whatsapp_instance FROM profissionais WHERE id = $1", profissional_id
+        )
+    if not instance:
+        return {"estado": "sem_instancia", "conectado": False}
+    state = await evolution.connection_state(instance)
+    return {"estado": state, "conectado": state == "open", "instancia": instance}
+
+
+@app.get("/whatsapp/qrcode")
+async def whatsapp_qrcode(profissional_id: int = Depends(auth.get_current_profissional_id)):
+    async with db.pool.acquire() as conn:
+        instance = await conn.fetchval(
+            "SELECT whatsapp_instance FROM profissionais WHERE id = $1", profissional_id
+        )
+    if not instance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instância não configurada")
+    qr = await evolution.get_qrcode(instance)
+    if not qr:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="QR code não disponível agora")
+    return {"qrcode": qr}
 
 
 @app.get("/google/status")

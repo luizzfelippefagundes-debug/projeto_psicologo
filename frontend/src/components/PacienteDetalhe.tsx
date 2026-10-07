@@ -60,21 +60,21 @@ export function PacienteDetalhe({
 
   return (
     <div>
-      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-xl font-extrabold text-accent-dark">
+      <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-[0_8px_24px_var(--color-shadow)] sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-[17px] font-extrabold text-accent-dark sm:h-16 sm:w-16 sm:rounded-2xl sm:text-xl">
               {iniciais(paciente.nome)}
             </div>
-            <div>
-              <h1 className="text-2xl font-extrabold">{paciente.nome}</h1>
-              <p className="mt-0.5 text-[14px] text-muted">
-                Paciente desde {formatDataHoraBrasilia(paciente.criado_em)}
+            <div className="min-w-0">
+              <h1 className="truncate text-[19px] font-extrabold sm:text-2xl">{paciente.nome}</h1>
+              <p className="mt-0.5 text-[12.5px] text-muted sm:text-[14px]">
+                Desde {formatDataHoraBrasilia(paciente.criado_em)}
               </p>
             </div>
           </div>
           <span
-            className={`inline-block rounded-full px-3 py-1 text-[12.5px] font-bold ${
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold sm:px-3 sm:text-[12.5px] ${
               paciente.status === "ativo"
                 ? "bg-accent-soft text-accent-dark"
                 : "bg-black/5 text-muted"
@@ -84,7 +84,7 @@ export function PacienteDetalhe({
           </span>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-5 border-t border-border pt-5 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-3 lg:grid-cols-5">
           <Campo label="Telefone" valor={paciente.telefone} />
           <Campo label="Email" valor={paciente.email ?? "—"} />
           <Campo
@@ -111,21 +111,24 @@ export function PacienteDetalhe({
         )}
       </div>
 
-      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-border">
-        {ABAS.map((a) => (
-          <button
-            key={a}
-            type="button"
-            onClick={() => setAba(a)}
-            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-[14px] font-bold transition-colors ${
-              aba === a
-                ? "border-accent text-accent-dark"
-                : "border-transparent text-muted hover:text-fg"
-            }`}
-          >
-            {a}
-          </button>
-        ))}
+      <div className="relative mb-5">
+        <div className="flex overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {ABAS.map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setAba(a)}
+              className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-[13.5px] font-bold transition-colors ${
+                aba === a
+                  ? "border-accent text-accent-dark"
+                  : "border-transparent text-muted hover:text-fg"
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-bg to-transparent" />
       </div>
 
       {aba === "Visão geral" && (
@@ -156,31 +159,30 @@ export function PacienteDetalhe({
               {sessoes.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-start justify-between gap-4 border-b border-border px-6 py-4 last:border-0"
+                  className="border-b border-border px-4 py-3 last:border-0 sm:px-6 sm:py-4"
                 >
-                  <div>
-                    <p className="text-[14.5px] font-bold">{formatDataHoraBrasilia(s.data_hora)}</p>
-                    <p className="mt-0.5 text-[13px] text-muted">
-                      {s.modalidade === "presencial" ? "Presencial" : "Teleconsulta"} · {s.local_nome} ·{" "}
-                      {s.duracao_minutos} min
-                    </p>
-                    {s.observacoes && (
-                      <p className="mt-1.5 text-[13.5px] text-fg">{s.observacoes}</p>
-                    )}
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-[14px] font-bold">{formatDataHoraBrasilia(s.data_hora)}</p>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold ${
+                        s.status === "confirmada"
+                          ? "bg-accent-soft text-accent-dark"
+                          : s.status === "concluida"
+                            ? "bg-black/5 text-muted"
+                            : s.status === "reservado"
+                              ? "bg-gold-soft text-gold"
+                              : "bg-red-500/10 text-red-600"
+                      }`}
+                    >
+                      {STATUS_SESSAO_LABEL[s.status]}
+                    </span>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-bold ${
-                      s.status === "confirmada"
-                        ? "bg-accent-soft text-accent-dark"
-                        : s.status === "concluida"
-                          ? "bg-black/5 text-muted"
-                          : s.status === "reservado"
-                            ? "bg-gold-soft text-gold"
-                            : "bg-red-500/10 text-red-600"
-                    }`}
-                  >
-                    {STATUS_SESSAO_LABEL[s.status]}
-                  </span>
+                  <p className="mt-0.5 text-[12.5px] text-muted">
+                    {s.modalidade === "presencial" ? "Presencial" : "Teleconsulta"} · {s.local_nome} · {s.duracao_minutos} min
+                  </p>
+                  {s.observacoes && (
+                    <p className="mt-1 text-[13px] text-fg">{s.observacoes}</p>
+                  )}
                 </li>
               ))}
             </ul>

@@ -71,9 +71,14 @@ export default function LoginPage() {
           </div>
 
           <div className="flex flex-col">
-            <label htmlFor="senha" className="mb-1.5 text-sm font-semibold">
-              Senha
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor="senha" className="text-sm font-semibold">
+                Senha
+              </label>
+              <Link href="/esqueci-senha" className="text-[12.5px] font-semibold text-accent-dark hover:underline">
+                Esqueceu a senha?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 id="senha"

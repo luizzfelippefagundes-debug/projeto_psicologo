@@ -7,6 +7,7 @@ import { IcloudCalendarConexao } from "@/components/IcloudCalendarConexao";
 import { LinkAgendamentoCopiar } from "@/components/LinkAgendamentoCopiar";
 import { PlaudConexao } from "@/components/PlaudConexao";
 import { ConfigBot } from "@/components/ConfigBot";
+import { WhatsappConexao } from "@/components/WhatsappConexao";
 import { getGoogleStatus, getIcloudStatus, getLocais, getMe, getRegrasHorario } from "@/lib/api";
 
 export default async function ConfiguracoesPage() {
@@ -56,6 +57,15 @@ export default async function ConfiguracoesPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
+        <h2 className="mb-4 text-[16px] font-bold">Conexão WhatsApp</h2>
+        <p className="mb-4 text-[14px] text-muted">
+          Status da conexão do bot com o WhatsApp. Se desconectou, escaneie o QR code abaixo com o
+          celular pra reconectar.
+        </p>
+        <WhatsappConexao />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
         <h2 className="mb-4 text-[16px] font-bold">Google Calendar</h2>
         <GoogleCalendarConexao conectado={googleStatus.conectado} />
       </div>
@@ -68,7 +78,7 @@ export default async function ConfiguracoesPage() {
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-[0_8px_24px_var(--color-shadow)]">
         <h2 className="mb-4 text-[16px] font-bold">Plaud</h2>
         <p className="mb-4 text-[14px] text-muted">
-          Configure um Zap no Zapier pra mandar suas gravações da Plaud direto pra cá — depois você
+          Configure um fluxo no n8n pra mandar suas gravações da Plaud direto pra cá — depois você
           vincula cada gravação à sessão certa na tela de edição da sessão.
         </p>
         <PlaudConexao webhookToken={profissional.plaud_webhook_token} />
