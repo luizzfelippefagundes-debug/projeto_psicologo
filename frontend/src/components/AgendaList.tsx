@@ -61,10 +61,14 @@ function calcularSlots(sessoes: SessaoPeriodo[], bloqueios: Bloqueio[], diaISO: 
   for (const bloqueio of bloqueios) {
     const ini = partesBrasilia(bloqueio.data_inicio);
     const fim = partesBrasilia(bloqueio.data_fim);
-    const inicioMinutos = ini.dataISO < diaISO ? 0 : ini.minutos;
-    const fimMinutos = fim.dataISO > diaISO ? 24 * 60 : fim.minutos;
-    inicioHora = Math.min(inicioHora, Math.floor(inicioMinutos / 60));
-    fimHora = Math.max(fimHora, Math.ceil(fimMinutos / 60));
+    // Só expande a grade se o bloqueio começa/termina no próprio dia —
+    // bloqueios multi-dia (Google Calendar) não devem puxar a grade para 00:00 ou 24:00
+    if (ini.dataISO >= diaISO) {
+      inicioHora = Math.min(inicioHora, Math.floor(ini.minutos / 60));
+    }
+    if (fim.dataISO <= diaISO) {
+      fimHora = Math.max(fimHora, Math.ceil(fim.minutos / 60));
+    }
   }
   fimHora = Math.min(fimHora, 24);
 
@@ -146,7 +150,8 @@ function posicaoDoSlot(
   sessoes: SessaoPeriodo[],
   bloqueios: Bloqueio[],
   horaLabel: string,
-  diaISO: string
+  diaISO: string,
+  slots: string[]
 ): Posicao {
   const [hs, ms] = horaLabel.split(":").map(Number);
   const slotMinutos = hs * 60 + ms;
@@ -165,9 +170,10 @@ function posicaoDoSlot(
     const fim = partesBrasilia(bloqueio.data_fim);
     const inicioMinutos = ini.dataISO < diaISO ? 0 : ini.minutos;
     const fimMinutos = fim.dataISO > diaISO ? 24 * 60 : fim.minutos;
-    if (slotMinutos === inicioMinutos) return { tipo: "bloqueio-inicio", bloqueio };
-    if (slotMinutos > inicioMinutos && slotMinutos < fimMinutos) {
-      return { tipo: "bloqueio-continuacao" };
+    if (slotMinutos >= inicioMinutos && slotMinutos < fimMinutos) {
+      // Bloqueio multi-dia iniciado antes de hoje: o primeiro slot da grade é o "inicio"
+      const ehInicio = ini.dataISO < diaISO ? horaLabel === slots[0] : slotMinutos === inicioMinutos;
+      return ehInicio ? { tipo: "bloqueio-inicio", bloqueio } : { tipo: "bloqueio-continuacao" };
     }
   }
 
@@ -477,7 +483,7 @@ export function AgendaList({
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_8px_24px_var(--color-shadow)]">
         {slots.map((horaLabel) => {
-          const pos = posicaoDoSlot(sessoes, bloqueios, horaLabel, diaISO);
+          const pos = posicaoDoSlot(sessoes, bloqueios, horaLabel, diaISO, slots);
 
           if (pos.tipo === "sessao-continuacao" || pos.tipo === "bloqueio-continuacao") {
             // determina a cor da sessão/bloqueio que está em andamento nesse slot
