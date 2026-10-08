@@ -714,6 +714,10 @@ class VincularGravacaoBody(BaseModel):
     sessao_id: int
 
 
+class VincularManualBody(BaseModel):
+    paciente_id: int
+
+
 @app.patch("/plaud/gravacoes/{gravacao_id}/vincular")
 async def vincular_gravacao_plaud(
     gravacao_id: int,
@@ -724,6 +728,38 @@ async def vincular_gravacao_plaud(
     if gravacao is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
     return {"status": "vinculada"}
+
+
+@app.post("/plaud/gravacoes/{gravacao_id}/identificar-paciente-manual")
+async def identificar_paciente_manual_plaud(
+    gravacao_id: int,
+    body: VincularManualBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    """Retorna o mesmo formato de /extrair-paciente, mas com paciente já escolhido pelo usuário."""
+    async with db.pool.acquire() as conn:
+        gravacao = await conn.fetchrow(
+            "SELECT id, gravado_em, recebido_em FROM plaud_gravacoes WHERE id = $1 AND profissional_id = $2",
+            gravacao_id, profissional_id,
+        )
+        if gravacao is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada")
+        paciente = await conn.fetchrow(
+            "SELECT id, nome, data_nascimento FROM pacientes WHERE id = $1 AND profissional_id = $2",
+            body.paciente_id, profissional_id,
+        )
+        if paciente is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado")
+    referencia = gravacao["gravado_em"] or gravacao["recebido_em"]
+    sessao = await plaud.buscar_sessao_para_vincular(profissional_id, body.paciente_id, referencia)
+    return {
+        "paciente_id": paciente["id"],
+        "paciente_nome": paciente["nome"],
+        "sessao_id": sessao["id"] if sessao else None,
+        "sessao_data_hora": sessao["data_hora"].isoformat() if sessao else None,
+        "nome": paciente["nome"],
+        "data_nascimento": paciente["data_nascimento"].isoformat() if paciente["data_nascimento"] else None,
+    }
 
 
 @app.post("/plaud/gravacoes/{gravacao_id}/texto-curto")
@@ -1604,10 +1640,14 @@ async def webhook_whatsapp(request: Request):
             )
 
     if resposta:
-        try:
-            await evolution.enviar_mensagem_texto(instance, telefone_paciente, resposta)
-        except Exception:
-            logger.exception("Erro enviando resposta via Evolution API (telefone=%s)", telefone_paciente)
+        partes = [p.strip() for p in resposta.split("[NOVA_MENSAGEM]") if p.strip()]
+        for i, parte in enumerate(partes):
+            try:
+                await evolution.enviar_mensagem_texto(instance, telefone_paciente, parte)
+                if i < len(partes) - 1:
+                    await asyncio.sleep(1.5)
+            except Exception:
+                logger.exception("Erro enviando resposta via Evolution API (telefone=%s)", telefone_paciente)
 
     return {"status": "ok"}
 

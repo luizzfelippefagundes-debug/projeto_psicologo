@@ -23,6 +23,8 @@ type DadosPaciente = {
   data_nascimento: string | null;
 };
 
+type PacienteOpcao = { id: number; nome: string };
+
 const ABAS: [Aba, string][] = [
   ["resumo", "Resumo"],
   ["texto", "Texto pronto"],
@@ -63,6 +65,9 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
   const [carregando, setCarregando] = useState(false);
   const [vinculando, setVinculando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [selecionandoManual, setSelecionandoManual] = useState(false);
+  const [pacientes, setPacientes] = useState<PacienteOpcao[]>([]);
+  const [carregandoPacientes, setCarregandoPacientes] = useState(false);
 
   async function detectar() {
     setCarregando(true);
@@ -78,6 +83,39 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
       return;
     }
     setDados(await res.json());
+    setCarregando(false);
+  }
+
+  async function abrirSelectorManual() {
+    setSelecionandoManual(true);
+    setErro(null);
+    if (pacientes.length === 0) {
+      setCarregandoPacientes(true);
+      const res = await fetch(`${API_URL}/pacientes`, { credentials: "include" });
+      if (res.ok) {
+        const lista: { id: number; nome: string }[] = await res.json();
+        setPacientes(lista.map((p) => ({ id: p.id, nome: p.nome })));
+      }
+      setCarregandoPacientes(false);
+    }
+  }
+
+  async function identificarManual(pacienteId: number) {
+    setCarregando(true);
+    setErro(null);
+    const res = await fetch(`${API_URL}/plaud/gravacoes/${gravacaoId}/identificar-paciente-manual`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paciente_id: pacienteId }),
+    });
+    if (!res.ok) {
+      setErro("Não foi possível identificar agora, tenta de novo.");
+      setCarregando(false);
+      return;
+    }
+    setDados(await res.json());
+    setSelecionandoManual(false);
     setCarregando(false);
   }
 
@@ -130,10 +168,35 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
     if (!dados.nome) {
       return (
         <div className="rounded-xl bg-black/5 p-3.5 text-[13.5px] text-muted">
-          Não conseguimos identificar automaticamente.{" "}
-          <a href="/pacientes" className="font-semibold text-accent-dark hover:underline">
-            Cadastrar manualmente
-          </a>
+          <p>Não conseguimos identificar automaticamente.</p>
+          <button
+            type="button"
+            onClick={abrirSelectorManual}
+            className="mt-2 rounded-xl border border-border bg-card px-3.5 py-2 text-[13px] font-bold text-fg hover:bg-accent-soft"
+          >
+            Selecionar paciente manualmente
+          </button>
+          {selecionandoManual && (
+            <div className="mt-3">
+              {carregandoPacientes ? (
+                <p className="text-[13px]">Carregando pacientes...</p>
+              ) : (
+                <select
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-[13.5px] text-fg outline-none focus:border-accent"
+                  defaultValue=""
+                  onChange={(e) => e.target.value && identificarManual(Number(e.target.value))}
+                  disabled={carregando}
+                >
+                  <option value="" disabled>Escolha o paciente…</option>
+                  {pacientes.map((p) => (
+                    <option key={p.id} value={p.id}>{p.nome}</option>
+                  ))}
+                </select>
+              )}
+              {carregando && <p className="mt-1 text-[13px]">Buscando sessão...</p>}
+            </div>
+          )}
+          {erro && <p className="mt-2 text-[13px] font-semibold text-red-600">{erro}</p>}
         </div>
       );
     }
