@@ -2,7 +2,9 @@ import logging
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-import anthropic
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 import asyncpg
 
 from app import agendamento, anamnese, db, notificacoes, reservas
@@ -61,7 +63,7 @@ def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
     return False
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-MODELO = "claude-haiku-4-5"
+MODELO = "gemini-3.5-flash-lite"
 MAX_TOKENS_RESPOSTA = 1024
 MAX_RODADAS_FERRAMENTA = 4
 
@@ -653,6 +655,51 @@ TOOLS = [
 ]
 
 
+def _schema_para_genai(esquema: dict) -> genai_types.Schema:
+    """Converte um input_schema no estilo JSON Schema (o formato das TOOLS, herdado da
+    API da Anthropic) no Schema equivalente do google-genai. Mantém as TOOLS como fonte
+    única — as ferramentas não são redefinidas num segundo formato, só traduzidas aqui."""
+    tipos = {
+        "object": genai_types.Type.OBJECT,
+        "string": genai_types.Type.STRING,
+        "integer": genai_types.Type.INTEGER,
+        "number": genai_types.Type.NUMBER,
+        "boolean": genai_types.Type.BOOLEAN,
+        "array": genai_types.Type.ARRAY,
+    }
+    kwargs: dict = {"type": tipos.get(esquema.get("type"), genai_types.Type.TYPE_UNSPECIFIED)}
+    if "description" in esquema:
+        kwargs["description"] = esquema["description"]
+    if "enum" in esquema:
+        kwargs["enum"] = esquema["enum"]
+    if "properties" in esquema:
+        kwargs["properties"] = {
+            nome: _schema_para_genai(sub) for nome, sub in esquema["properties"].items()
+        }
+    if esquema.get("required"):
+        kwargs["required"] = esquema["required"]
+    if "items" in esquema:
+        kwargs["items"] = _schema_para_genai(esquema["items"])
+    return genai_types.Schema(**kwargs)
+
+
+# Ferramentas no formato do google-genai, derivadas de TOOLS (fonte única). Ferramenta
+# sem parâmetros (properties vazio, ex: confirmar_horario_reservado) vai com
+# parameters=None — o Gemini recusa um objeto de parâmetros vazio.
+GENAI_TOOLS = [genai_types.Tool(function_declarations=[
+    genai_types.FunctionDeclaration(
+        name=t["name"],
+        description=t["description"],
+        parameters=(
+            _schema_para_genai(t["input_schema"])
+            if t["input_schema"].get("properties")
+            else None
+        ),
+    )
+    for t in TOOLS
+])]
+
+
 async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nome: str, entrada: dict) -> str:
     try:
         if nome == "consultar_horarios_disponiveis":
@@ -730,10 +777,10 @@ async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nom
 async def processar_mensagem(
     profissional_id: int, telefone_paciente: str, mensagem: str, historico: list[dict]
 ) -> dict:
-    if not settings.anthropic_api_key:
+    if not settings.gemini_api_key:
         return {
             "resposta": (
-                "Bot ainda não está configurado (falta a chave da API da Anthropic). "
+                "Bot ainda não está configurado (falta a chave da API do Gemini). "
                 "Assim que a chave for adicionada, o agendamento por function calling funciona de verdade."
             ),
             "acoes": [],
@@ -865,26 +912,58 @@ async def processar_mensagem(
         )
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    messages = [{"role": m["role"], "content": m["content"]} for m in historico]
-    messages.append({"role": "user", "content": mensagem})
+    client = genai.Client(api_key=settings.gemini_api_key)
+    config = genai_types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        tools=GENAI_TOOLS,
+        max_output_tokens=MAX_TOKENS_RESPOSTA,
+        # As ferramentas são executadas manualmente aqui (efeitos no banco, escalonamento,
+        # rastreio de ações) — a chamada automática de função do SDK fica desligada de propósito.
+        automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
+    )
+    papel = {"user": "user", "assistant": "model"}
+    contents = [
+        genai_types.Content(
+            role=papel.get(m["role"], "user"),
+            parts=[genai_types.Part.from_text(text=m["content"])],
+        )
+        for m in historico
+    ]
+    contents.append(genai_types.Content(role="user", parts=[genai_types.Part.from_text(text=mensagem)]))
     acoes: list[str] = []
 
     for _ in range(MAX_RODADAS_FERRAMENTA):
         try:
-            resposta = await client.messages.create(
+            resposta = await client.aio.models.generate_content(
                 model=MODELO,
-                max_tokens=MAX_TOKENS_RESPOSTA,
-                system=system_prompt,
-                tools=TOOLS,
-                messages=messages,
+                contents=contents,
+                config=config,
             )
-        except anthropic.APIError:
+        except genai_errors.APIError as e:
+            # Antes o erro da IA era engolido em silêncio; logar aqui garante que uma falha
+            # (sem crédito/quota, sobrecarga, chave inválida) apareça no log, em vez de virar
+            # só a mensagem genérica de instabilidade sem rastro — foi exatamente o que deixou
+            # a queda por falta de crédito invisível nos logs.
+            logger.warning("Falha na API do Gemini (telefone=%s): %s", telefone_paciente, e)
             return {"resposta": MENSAGEM_ERRO_IA, "acoes": acoes}
 
-        chamadas = [b for b in resposta.content if b.type == "tool_use"]
+        candidato = resposta.candidates[0] if resposta.candidates else None
+        partes = (
+            candidato.content.parts
+            if candidato and candidato.content and candidato.content.parts
+            else []
+        )
+        chamadas = [p.function_call for p in partes if p.function_call]
         if not chamadas:
-            texto = "".join(b.text for b in resposta.content if b.type == "text")
+            texto = "".join(p.text for p in partes if p.text)
+            if not texto:
+                # Sem texto e sem ferramenta (ex: resposta bloqueada por filtro de segurança) —
+                # não mandamos uma mensagem vazia pro paciente.
+                logger.warning(
+                    "Gemini retornou resposta vazia (telefone=%s, finish_reason=%s)",
+                    telefone_paciente, getattr(candidato, "finish_reason", None),
+                )
+                return {"resposta": MENSAGEM_ERRO_IA, "acoes": acoes}
             if _alega_confirmacao_sem_ter_agendado(texto, acoes):
                 logger.warning(
                     "Bot tentou confirmar agendamento sem chamar criar_agendamento (telefone=%s): %s",
@@ -893,15 +972,16 @@ async def processar_mensagem(
                 return {"resposta": MENSAGEM_CONFIRMACAO_SEM_AGENDAMENTO, "acoes": acoes}
             return {"resposta": texto, "acoes": acoes}
 
-        messages.append({"role": "assistant", "content": resposta.content})
+        contents.append(candidato.content)
         resultados_ferramenta = []
         for chamada in chamadas:
+            entrada = dict(chamada.args) if chamada.args else {}
             resultado = await _executar_ferramenta(
-                profissional_id, telefone_paciente, chamada.name, chamada.input
+                profissional_id, telefone_paciente, chamada.name, entrada
             )
             if chamada.name == "acolher_e_escalar" and resultado == "ESCALADO":
                 # Mensagem fixa, não deixamos o modelo gerar a resposta numa situação sensível
-                acoes.append(f"Escalado para a profissional (motivo: {chamada.input.get('motivo')})")
+                acoes.append(f"Escalado para a profissional (motivo: {entrada.get('motivo')})")
                 return {
                     "resposta": MENSAGEM_ACOLHIMENTO.format(profissional=profissional["nome"]),
                     "acoes": acoes,
@@ -910,9 +990,11 @@ async def processar_mensagem(
                     and not resultado.startswith("Erro:"):
                 acoes.append(resultado)
             resultados_ferramenta.append(
-                {"type": "tool_result", "tool_use_id": chamada.id, "content": resultado}
+                genai_types.Part.from_function_response(
+                    name=chamada.name, response={"result": resultado}
+                )
             )
-        messages.append({"role": "user", "content": resultados_ferramenta})
+        contents.append(genai_types.Content(role="user", parts=resultados_ferramenta))
 
     return {
         "resposta": "Desculpa, não consegui concluir agora — pode tentar reformular seu pedido?",
