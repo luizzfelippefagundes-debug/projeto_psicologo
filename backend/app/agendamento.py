@@ -56,7 +56,7 @@ async def horarios_disponiveis(
         janelas_ocupadas += [(row["data_inicio"], row["data_fim"]) for row in bloqueios]
 
     livres: list[str] = []
-    passo = timedelta(minutes=30)
+    passo = timedelta(minutes=60)
     duracao = timedelta(minutes=duracao_minutos)
     agora = datetime.now(BRASILIA)
 

@@ -34,11 +34,15 @@ export function TranscricaoChat({ texto }: { texto: string }) {
   const falas = parsearTranscricao(texto);
 
   if (!falas) {
-    return <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">{texto}</p>;
+    return (
+      <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border p-4">
+        <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">{texto}</p>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto rounded-xl border border-border p-4">
       {falas.map((fala, i) => {
         const rotulo = rotuloSpeaker(fala.speaker);
         const estilo = fala.speaker === "2" ? ESTILO_PSICOLOGA : ESTILO_PACIENTE;

@@ -1,7 +1,7 @@
 import logging
+import unicodedata
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
-
 import anthropic
 import asyncpg
 
@@ -61,7 +61,7 @@ def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
     return False
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-MODELO = "claude-haiku-4-5"
+MODELO = "claude-sonnet-4-5"
 MAX_TOKENS_RESPOSTA = 1024
 MAX_RODADAS_FERRAMENTA = 4
 
@@ -76,11 +76,64 @@ async def horarios_disponiveis(
     )
 
 
+async def buscar_proximos_horarios(
+    profissional_id: int, local_nome: str, duracao_minutos: int = 50, max_opcoes: int = 2
+) -> list[tuple[date, str]]:
+    """Retorna as próximas vagas disponíveis (até max_opcoes) sem precisar de data específica."""
+    from datetime import timedelta
+    async with db.pool.acquire() as conn:
+        local = await _buscar_local(conn, profissional_id, local_nome)
+        # Busca quais dias da semana têm regras de horário para esse local
+        dias = await conn.fetch(
+            "SELECT DISTINCT dia_semana FROM regras_horario "
+            "WHERE profissional_id = $1 AND local_id = $2 AND ativo",
+            profissional_id, local["id"],
+        )
+    dias_com_horario = {r["dia_semana"] for r in dias}  # formato banco: dom=0..sab=6
+
+    opcoes: list[tuple[date, str]] = []
+    candidata = date.today() + timedelta(days=1)
+    for _ in range(60):  # busca até 60 dias à frente
+        # converte dia Python (seg=0..dom=6) para formato banco (dom=0..sab=6)
+        dia_banco = (candidata.weekday() + 1) % 7
+        if dia_banco in dias_com_horario:
+            horarios = await agendamento.horarios_disponiveis(
+                profissional_id, local["id"], candidata, duracao_minutos
+            )
+            for h in horarios:
+                opcoes.append((candidata, h))
+                if len(opcoes) >= max_opcoes:
+                    return opcoes
+        candidata += timedelta(days=1)
+    return opcoes
+
+
+def _normalizar(s: str) -> str:
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode().lower().strip()
+
+
+def _detectar_local_na_mensagem(mensagem: str, nomes_locais: str) -> str | None:
+    """Retorna o nome do local se a mensagem do paciente identificar um local disponível."""
+    msg_norm = _normalizar(mensagem)
+    for local in nomes_locais.split(", "):
+        if _normalizar(local) in msg_norm or msg_norm in _normalizar(local):
+            return local
+    return None
+
+
 async def _buscar_local(conn, profissional_id: int, local_nome: str):
+    # Tenta primeiro match exato (case-insensitive)
     local = await conn.fetchrow(
         "SELECT id, nome FROM locais WHERE profissional_id = $1 AND nome ILIKE $2",
         profissional_id, local_nome,
     )
+    if local is None:
+        # Fallback: ignora acentos comparando em Python
+        todos = await conn.fetch(
+            "SELECT id, nome FROM locais WHERE profissional_id = $1", profissional_id
+        )
+        alvo = _normalizar(local_nome)
+        local = next((r for r in todos if _normalizar(r["nome"]) == alvo), None)
     if local is None:
         raise ValueError(f"Não encontrei o local '{local_nome}'.")
     return local
@@ -447,27 +500,28 @@ async def escalar_conversa(
 
 TOOLS = [
     {
-        "name": "consultar_horarios_disponiveis",
+        "name": "buscar_proximos_horarios",
         "description": (
-            "Consulta os horários realmente livres para agendamento em um local, numa data "
-            "específica. Sempre use esta ferramenta antes de oferecer um horário — nunca invente "
-            "ou suponha disponibilidade."
+            "Busca os próximos horários disponíveis para agendamento. "
+            "Chame imediatamente após saber o local — NÃO pergunte data, período, manhã ou tarde. "
+            "Se o paciente pedir uma data específica, passe em data_especifica. "
+            "Retorna as próximas vagas disponíveis para você apresentar ao paciente."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "local_nome": {"type": "string", "description": "Nome do local de atendimento"},
-                "data": {"type": "string", "description": "Data no formato YYYY-MM-DD"},
+                "data_especifica": {"type": "string", "description": "Data no formato YYYY-MM-DD, somente se o paciente pediu uma data específica. Omitir para buscar os próximos horários automaticamente."},
                 "duracao_minutos": {"type": "integer", "description": "Duração da sessão em minutos (padrão 50)"},
             },
-            "required": ["local_nome", "data"],
+            "required": ["local_nome"],
         },
     },
     {
         "name": "criar_agendamento",
         "description": (
             "Cria de fato o agendamento pro paciente, depois que ele confirmou um horário "
-            "que veio de consultar_horarios_disponiveis."
+            "que veio de buscar_proximos_horarios ou consultar_horarios_disponiveis."
         ),
         "input_schema": {
             "type": "object",
@@ -495,18 +549,6 @@ TOOLS = [
                         "Pra pacientes que já têm cadastro, não precisa perguntar de novo."
                     ),
                 },
-                "procedimento_estimulacao": {
-                    "type": "boolean",
-                    "description": (
-                        "Só true se for a primeira sessão de um paciente novo E a consulta for "
-                        "de estimulação/neuromodulação (tDCS) — pergunte isso de forma simples "
-                        "('é uma consulta de estimulação/tDCS ou uma consulta regular?'), nunca "
-                        "peça pro paciente escolher entre categorias clínicas. Isso já garante o "
-                        "envio do formulário de anamnese certo na hora da confirmação. Pra "
-                        "pacientes que já têm cadastro, não precisa perguntar de novo — quem "
-                        "decide o tipo de procedimento deles é a profissional, pelo painel."
-                    ),
-                },
             },
             "required": ["nome_paciente", "local_nome", "data_hora"],
         },
@@ -515,7 +557,7 @@ TOOLS = [
         "name": "segurar_horario",
         "description": (
             "Segura (reserva temporariamente) um horário pro paciente, sem confirmar de vez, "
-            "quando ele demonstra interesse num horário oferecido por consultar_horarios_disponiveis "
+            "quando ele demonstra interesse num horário oferecido por buscar_proximos_horarios "
             "mas ainda não confirmou de cara (ex: pediu pra pensar, disse que confirma depois). "
             "A reserva expira sozinha ainda hoje se ele não confirmar."
         ),
@@ -541,16 +583,6 @@ TOOLS = [
                         "Data de nascimento do paciente, no formato YYYY-MM-DD. Só preencha se "
                         "for a primeira sessão de um paciente novo. Pra pacientes que já têm "
                         "cadastro, não precisa perguntar de novo."
-                    ),
-                },
-                "procedimento_estimulacao": {
-                    "type": "boolean",
-                    "description": (
-                        "Só true se for a primeira sessão de um paciente novo E a consulta for "
-                        "de estimulação/neuromodulação (tDCS) — pergunte isso de forma simples "
-                        "('é uma consulta de estimulação/tDCS ou uma consulta regular?'), nunca "
-                        "peça pro paciente escolher entre categorias clínicas. Pra pacientes que "
-                        "já têm cadastro, não precisa perguntar de novo."
                     ),
                 },
             },
@@ -586,7 +618,7 @@ TOOLS = [
                 "periodo_preferido": {
                     "type": "string",
                     "enum": ["manha", "tarde", "qualquer"],
-                    "description": "Período do dia que o paciente prefere, ou 'qualquer' se não tiver preferência.",
+                    "description": "Período do dia que o paciente prefere. Use 'qualquer' por padrão — só pergunte isso ao paciente se ele mesmo mencionar preferência de horário.",
                 },
                 "consentimento_lgpd": {
                     "type": "boolean",
@@ -655,16 +687,33 @@ TOOLS = [
 
 async def _executar_ferramenta(profissional_id: int, telefone_paciente: str, nome: str, entrada: dict) -> str:
     try:
-        if nome == "consultar_horarios_disponiveis":
-            horarios = await horarios_disponiveis(
-                profissional_id,
-                entrada["local_nome"],
-                entrada["data"],
-                entrada.get("duracao_minutos", 50),
-            )
-            if not horarios:
-                return "Nenhum horário livre nesse dia."
-            return "Horários livres: " + ", ".join(horarios)
+        if nome == "buscar_proximos_horarios":
+            data_especifica = entrada.get("data_especifica")
+            if data_especifica:
+                # Busca na data específica pedida pelo paciente
+                horarios = await horarios_disponiveis(
+                    profissional_id,
+                    entrada["local_nome"],
+                    data_especifica,
+                    entrada.get("duracao_minutos", 50),
+                )
+                if not horarios:
+                    return f"Nenhum horário disponível em {data_especifica}."
+                d = date.fromisoformat(data_especifica)
+                dia_pt = d.strftime('%A').replace('Monday','segunda').replace('Tuesday','terça').replace('Wednesday','quarta').replace('Thursday','quinta').replace('Friday','sexta').replace('Saturday','sábado').replace('Sunday','domingo')
+                return f"Horários disponíveis em {d.strftime('%d/%m/%Y')} ({dia_pt}): " + ", ".join(horarios)
+            else:
+                opcoes = await buscar_proximos_horarios(
+                    profissional_id,
+                    entrada["local_nome"],
+                    entrada.get("duracao_minutos", 50),
+                )
+                if not opcoes:
+                    return "Nenhum horário disponível nos próximos 60 dias."
+                return "Próximos horários disponíveis: " + ", ".join(
+                    f"{d.strftime('%d/%m/%Y')} ({d.strftime('%A').replace('Monday','segunda').replace('Tuesday','terça').replace('Wednesday','quarta').replace('Thursday','quinta').replace('Friday','sexta').replace('Saturday','sábado').replace('Sunday','domingo')}) às {h}"
+                    for d, h in opcoes
+                )
 
         if nome == "criar_agendamento":
             resultado = await criar_agendamento(
@@ -778,9 +827,15 @@ async def processar_mensagem(
             if primeira_mensagem and profissional["nome_secretaria"]
             else ""
         )
-        + "Conduza a conversa aos poucos: prefira perguntas abertas (ex: 'prefere de manhã ou fim "
-        "de tarde?') a listar de uma vez tudo que falta (nome, local, modalidade, data). Peça uma "
-        "coisa de cada vez, na ordem que fizer sentido pra conversa.\n"
+        + "FLUXO DE AGENDAMENTO — siga exatamente esta ordem, uma pergunta por vez:\n"
+        "1. Perguntar se já é paciente (já feito na apresentação)\n"
+        "2. Pedir o nome completo\n"
+        "3. Perguntar presencial ou teleconsulta\n"
+        "4. Perguntar o local (Barra de São Francisco ou Vitória)\n"
+        "5. Chamar buscar_proximos_horarios — NESTA ETAPA, NÃO PERGUNTE NADA, vá direto chamar a ferramenta\n"
+        "6. Apresentar as 2 opções retornadas e perguntar qual prefere\n"
+        "7. Confirmar o agendamento (coletar nome/DOB/LGPD se for paciente novo, depois criar_agendamento)\n"
+        "NUNCA pule para perguntas de data, período, manhã ou tarde — a ferramenta cuida disso.\n"
         "\n"
         "# REGRAS DE OURO\n"
         "- NUNCA use emojis em nenhuma mensagem, em nenhuma hipótese. Escreva como uma "
@@ -791,7 +846,12 @@ async def processar_mensagem(
         "paciente João, dia 02/09 às 15h, no Consultório Centro, presencial.' Sempre em texto "
         "corrido, numa frase normal separando por vírgula ou 'e' — mesmo em resumos com vários "
         "dados.\n"
-        "- NUNCA ofereça um horário sem antes chamar consultar_horarios_disponiveis. Nunca invente.\n"
+        "- NUNCA ofereça um horário sem antes chamar buscar_proximos_horarios. Nunca invente.\n"
+        "- NUNCA pergunte ao paciente 'qual data prefere?', 'qual período?', 'manhã ou tarde?' ou "
+        "qualquer variação disso. Chame buscar_proximos_horarios IMEDIATAMENTE após saber o local — "
+        "sem fazer mais nenhuma pergunta antes.\n"
+        "- Se uma ferramenta retornar erro, NÃO invente 'dificuldade técnica' nem sugira outro local "
+        "sem o paciente pedir — informe que não há horário disponível nessa data e tente a próxima.\n"
         "- NUNCA reaproveite uma lista de horários que você já deu antes na conversa, mesmo pra "
         "mesma data — o tempo passa e outros pacientes podem ter agendado nesse meio tempo. Chame a "
         "ferramenta de novo a cada vez que o paciente perguntar sobre disponibilidade.\n"
@@ -802,8 +862,13 @@ async def processar_mensagem(
         "verdade no sistema.\n"
         "- SEMPRE use criar_agendamento quando o paciente confirmar explicitamente, na hora, um "
         "horário oferecido.\n"
+        "- Para paciente NOVO: antes de dizer qualquer coisa que sugira confirmação ('vou confirmar', "
+        "'agendamento feito', etc.), colete PRIMEIRO todas as informações que faltam — nome completo, "
+        "data de nascimento e consentimento LGPD — uma por vez, na ordem. Só depois de ter tudo "
+        "chame criar_agendamento e informe a confirmação. NUNCA diga 'vou confirmar' e depois peça "
+        "mais dados: isso confunde o paciente que acha que já está marcado.\n"
         "- Se o paciente já confirmou o horário e, depois disso, você ainda coletou outras "
-        "informações (nome, data de nascimento, consentimento LGPD, procedimento_estimulacao — "
+        "informações (nome, data de nascimento, consentimento LGPD — "
         "pro caso de paciente novo), NÃO peça o horário e local de novo, e NÃO pergunte de novo "
         "se pode confirmar — o paciente já confirmou isso antes. Assim que a última informação "
         "que faltava for respondida, chame criar_agendamento IMEDIATAMENTE nessa mesma resposta, "
@@ -814,17 +879,18 @@ async def processar_mensagem(
         "confirmando — mesmo que seja numa mensagem bem depois, em outra conversa — use "
         "confirmar_horario_reservado (não precisa de nenhum dado extra, ela já identifica sozinha "
         "a reserva ativa desse paciente).\n"
-        "- Se consultar_horarios_disponiveis não achar nada bom pro que o paciente quer (ex: dia "
-        "lotado), ofereça entrar na lista de espera com entrar_lista_espera em vez de só dizer que "
-        "não tem horário. Pra paciente NOVO nessa situação, recomende agendar o próximo horário "
-        "realmente disponível E entrar na lista de espera ao mesmo tempo (não é ou um ou outro) — "
-        "assim ele já garante uma consulta e ainda pode ser chamado antes se abrir vaga melhor.\n"
+        "- Se buscar_proximos_horarios não retornar nada (sem vagas nos próximos 60 dias), ofereça "
+        "entrar na lista de espera com entrar_lista_espera. Pra paciente NOVO, recomende as duas "
+        "coisas juntas: agendar o próximo horário disponível E entrar na lista de espera.\n"
         "- Se um paciente que JÁ TEM CADASTRO pedir um horário mais próximo do que os disponíveis, "
         "use solicitar_horario_especial (não invente nem prometa um horário de verdade) e diga que "
         "vai consultar a possibilidade com a profissional e retornar em até 24 horas.\n"
         "- Ao confirmar um agendamento (depois de criar_agendamento, segurar_horario ou "
-        "confirmar_horario_reservado), sempre inclua no resumo o pedido de avisar com 48 horas de "
-        "antecedência em caso de imprevisto/cancelamento.\n"
+        "confirmar_horario_reservado), envie o resumo da consulta normalmente e depois, em uma "
+        "MENSAGEM SEPARADA, o lembrete de cancelamento. Para separar as duas mensagens, coloque "
+        "exatamente o marcador [NOVA_MENSAGEM] entre elas (sem aspas, sozinho na linha). "
+        "Exemplo: 'Segue o resumo: paciente João, dia 20/10 às 10h, presencial.'[NOVA_MENSAGEM]"
+        "'Por favor, avise com 48 horas de antecedência em caso de cancelamento.'\n"
         "- NUNCA invente urgência (frases genéricas tipo 'os horários estão acabando rápido' sem "
         "isso ser verdade). A pressão real já vem do prazo de expiração do hold e da lista de "
         "espera em si — não precisa exagerar.\n"
@@ -834,16 +900,8 @@ async def processar_mensagem(
         "- SEMPRE pergunte a data de nascimento do paciente (no mesmo momento em que perguntar o "
         "consentimento LGPD) se for a primeira sessão de um paciente novo, e passe em "
         "data_nascimento. Pra pacientes que já têm cadastro, não precisa perguntar de novo.\n"
-        "- SEMPRE pergunte, de forma simples (ex: 'é uma consulta de estimulação/tDCS ou uma "
-        "consulta regular?'), se a consulta é de estimulação/neuromodulação, no mesmo momento em "
-        "que perguntar o consentimento LGPD, se for a primeira sessão de um paciente novo — passe "
-        "em procedimento_estimulacao. NUNCA peça pro paciente escolher entre categorias clínicas "
-        "(isso é decisão da profissional, não do bot). Pra pacientes que já têm cadastro, não "
-        "precisa perguntar de novo.\n"
-        "- Só mencione o envio de formulário de anamnese na mensagem de confirmação quando "
-        "procedimento_estimulacao for true (ou pra paciente que já tinha cadastro de estimulação/ "
-        "neuromodulação antes). Pra consulta regular, NÃO diga que vai mandar formulário nenhum — "
-        "isso é falso e confunde o paciente.\n"
+        "- NÃO mencione envio de formulário de anamnese na mensagem de confirmação — "
+        "isso confunde o paciente.\n"
         "- Quem está conversando por WhatsApp pode não ser o próprio paciente (ex: filho(a) "
         "marcando consulta pra mãe/pai, responsável marcando pra criança). NUNCA chame quem está "
         "conversando pelo nome do paciente — são pessoas diferentes. Use o nome do paciente só "
@@ -851,6 +909,14 @@ async def processar_mensagem(
         "dirigir a quem está no chat.\n"
         "- Ao perguntar se uma data ou horário serve, prefira frases tipo 'Isso fica bom pra "
         "você?' em vez de 'Isso serve pra você?' ou 'Funciona para você?'.\n"
+        "- CONTATO PROATIVO: às vezes a última mensagem do assistente no histórico é um contato que o "
+        "sistema iniciou por conta própria (acompanhamento pós-consulta, lembrete, parabéns, aviso de "
+        "vaga, 'podemos continuar no agendamento?'). Quando o paciente responder, entenda a resposta "
+        "NESSE contexto — não retome um agendamento ou remarcação antigo do histórico, e não peça "
+        "data nem local, a menos que o paciente peça claramente pra marcar ou remarcar. Se a resposta "
+        "for vaga ('oi', 'várias', 'sim'), pergunte com naturalidade a que ele se refere (ex: quais "
+        "dúvidas ele tem). Dúvida sobre orientações do tratamento ou sobre a sessão não é com você: "
+        "chame acolher_e_escalar com motivo fora_do_escopo pra avisar a profissional.\n"
         "- SEMPRE chame acolher_e_escalar imediatamente (sem tentar ajudar você mesmo) se o paciente "
         "relatar uma situação de crise ou pedir algo fora do escopo de agendamento (conselho "
         "clínico, diagnóstico, etc.).\n"
@@ -869,6 +935,26 @@ async def processar_mensagem(
     messages = [{"role": m["role"], "content": m["content"]} for m in historico]
     messages.append({"role": "user", "content": mensagem})
     acoes: list[str] = []
+
+    # Injeta buscar_proximos_horarios automaticamente quando o local acabou de ser escolhido,
+    # evitando que o modelo peça período/data ao paciente.
+    local_detectado = _detectar_local_na_mensagem(mensagem, nomes_locais)
+    if local_detectado:
+        try:
+            tool_id = "auto_buscar_horarios"
+            resultado_horarios = await _executar_ferramenta(
+                profissional_id, telefone_paciente, "buscar_proximos_horarios",
+                {"local_nome": local_detectado}
+            )
+            messages.append({"role": "assistant", "content": [
+                {"type": "tool_use", "id": tool_id, "name": "buscar_proximos_horarios",
+                 "input": {"local_nome": local_detectado}}
+            ]})
+            messages.append({"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": tool_id, "content": resultado_horarios}
+            ]})
+        except Exception:
+            pass  # se falhar, deixa o modelo tentar normalmente
 
     for _ in range(MAX_RODADAS_FERRAMENTA):
         try:

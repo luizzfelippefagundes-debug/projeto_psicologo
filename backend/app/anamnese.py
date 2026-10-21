@@ -90,7 +90,7 @@ async def enviar_anamnese(
 
     if whatsapp_instance:
         try:
-            await evolution.enviar_mensagem_texto(
+            await evolution.enviar_mensagem_proativa(
                 whatsapp_instance,
                 paciente_telefone,
                 f"Antes da sua consulta, pedimos que preencha o formulário de anamnese por esse "

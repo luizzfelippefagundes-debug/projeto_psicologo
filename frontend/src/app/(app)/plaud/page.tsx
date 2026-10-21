@@ -1,5 +1,6 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PlaudGravacoesLista } from "@/components/PlaudGravacoesLista";
+import { PlaudFormularioManual } from "@/components/PlaudFormularioManual";
 import { getGravacoesPlaud } from "@/lib/api";
 
 export default async function PlaudPage() {
@@ -11,10 +12,14 @@ export default async function PlaudPage() {
         <div>
           <h1 className="text-2xl font-extrabold">Plaud</h1>
           <p className="mt-1 text-[14.5px] text-muted">
-            Gravações recebidas automaticamente via webhook, vinculadas ou não a uma sessão
+            Gravações da Plaud — adicione manualmente ou receba via webhook
           </p>
         </div>
         <ThemeToggle />
+      </div>
+
+      <div className="mb-5">
+        <PlaudFormularioManual />
       </div>
 
       <PlaudGravacoesLista gravacoes={gravacoes} />

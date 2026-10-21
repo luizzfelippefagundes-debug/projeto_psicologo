@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Folder, FolderOpen, Pencil } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, Pencil, Search } from "lucide-react";
 import type { PlaudGravacaoLista } from "@/lib/api";
-import { formatDataHoraBrasilia } from "@/lib/format";
+import { formatDataHoraBrasilia, iniciais } from "@/lib/format";
 import { MarkdownTexto, textoSimples } from "@/components/MarkdownTexto";
 import { TranscricaoChat } from "@/components/TranscricaoChat";
 import { MapaMentalPlaud } from "@/components/MapaMentalPlaud";
+import { Modal } from "@/components/Modal";
 
 const API_URL = "/api"; // passa pelo rewrite do Next.js — cookie de sessão nasce no domínio do site
 const CHAVE_SEM_VINCULO = "__sem_vinculo__";
@@ -68,6 +69,7 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
   const [selecionandoManual, setSelecionandoManual] = useState(false);
   const [pacientes, setPacientes] = useState<PacienteOpcao[]>([]);
   const [carregandoPacientes, setCarregandoPacientes] = useState(false);
+  const [busca, setBusca] = useState("");
 
   async function detectar() {
     setCarregando(true);
@@ -88,6 +90,7 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
 
   async function abrirSelectorManual() {
     setSelecionandoManual(true);
+    setBusca("");
     setErro(null);
     if (pacientes.length === 0) {
       setCarregandoPacientes(true);
@@ -136,6 +139,11 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
     router.refresh();
   }
 
+  const termo = busca.trim().toLowerCase();
+  const pacientesFiltrados = termo
+    ? pacientes.filter((p) => p.nome.toLowerCase().includes(termo))
+    : pacientes;
+
   if (dados) {
     // Paciente já cadastrado, identificado pela IA — vincula direto à sessão dele
     // mais próxima da data da gravação, sem precisar cadastrar nada de novo.
@@ -176,26 +184,54 @@ function AcaoDetectarPaciente({ gravacaoId, temTranscricao }: { gravacaoId: numb
           >
             Selecionar paciente manualmente
           </button>
-          {selecionandoManual && (
-            <div className="mt-3">
-              {carregandoPacientes ? (
-                <p className="text-[13px]">Carregando pacientes...</p>
-              ) : (
-                <select
-                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-[13.5px] text-fg outline-none focus:border-accent"
-                  defaultValue=""
-                  onChange={(e) => e.target.value && identificarManual(Number(e.target.value))}
-                  disabled={carregando}
-                >
-                  <option value="" disabled>Escolha o paciente…</option>
-                  {pacientes.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nome}</option>
-                  ))}
-                </select>
-              )}
-              {carregando && <p className="mt-1 text-[13px]">Buscando sessão...</p>}
+          <Modal
+            open={selecionandoManual}
+            onClose={() => !carregando && setSelecionandoManual(false)}
+            title="Selecionar paciente"
+          >
+            <div className="relative mb-3">
+              <Search
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                strokeWidth={2}
+              />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar paciente pelo nome..."
+                autoFocus
+                className="w-full rounded-xl border border-border bg-card py-2.5 pl-10 pr-3.5 text-[14px] text-fg outline-none focus:border-accent"
+              />
             </div>
-          )}
+
+            {carregandoPacientes ? (
+              <p className="py-6 text-center text-[13.5px] text-muted">Carregando pacientes...</p>
+            ) : (
+              <ul className="flex max-h-[50vh] flex-col gap-1 overflow-y-auto">
+                {pacientesFiltrados.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => identificarManual(p.id)}
+                      disabled={carregando}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent-soft disabled:opacity-60"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11.5px] font-extrabold text-accent-dark">
+                        {iniciais(p.nome)}
+                      </span>
+                      <span className="truncate text-[14px] font-semibold">{p.nome}</span>
+                    </button>
+                  </li>
+                ))}
+                {pacientesFiltrados.length === 0 && (
+                  <li className="py-6 text-center text-[13.5px] text-muted">Nenhum paciente encontrado.</li>
+                )}
+              </ul>
+            )}
+
+            {carregando && <p className="mt-3 text-[13px] text-muted">Buscando sessão...</p>}
+            {erro && <p className="mt-3 text-[13px] font-semibold text-red-600">{erro}</p>}
+          </Modal>
           {erro && <p className="mt-2 text-[13px] font-semibold text-red-600">{erro}</p>}
         </div>
       );
@@ -471,8 +507,7 @@ export function PlaudGravacoesLista({ gravacoes }: { gravacoes: PlaudGravacaoLis
     return (
       <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-[0_8px_24px_var(--color-shadow)]">
         <p className="text-[14px] text-muted">
-          Nenhuma gravação recebida ainda. Configure o Zap no Zapier (Configurações → Plaud) pra elas
-          aparecerem aqui.
+          Nenhuma gravação ainda. Use o botão acima pra adicionar manualmente.
         </p>
       </div>
     );

@@ -7,7 +7,7 @@ O bot de agendamento pelo WhatsApp (`backend/app/bot.py`) hoje só sabe fazer du
 O usuário trouxe prints de um material de copywriting pra clínicas (@escoladaagendalotada) mostrando três técnicas de atendimento que aumentam conversão de agendamento:
 1. Perguntas abertas e graduais em vez de listar exigências de uma vez.
 2. Segurar (hold) um horário por um prazo curto quando o paciente hesita, criando compromisso sem forçar confirmação imediata.
-3. Lista de espera: quando não há horário bom, oferecer avisar proativamente quando um abrir.
+3. Lista de espera: quando não há horário bom, oferecer avisar proativamente quando um abrir.1
 
 Este documento cobre as três. Uma quarta técnica dos prints — contornar objeção de preço — fica de fora: o sistema não tem noção de valores/preços em nenhuma tabela hoje, e criar uma política de preço não faz parte deste escopo.
 

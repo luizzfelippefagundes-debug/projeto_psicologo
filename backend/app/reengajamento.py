@@ -57,7 +57,7 @@ async def _enviar_nudges() -> None:
             texto = f"{saudacao}, podemos continuar no agendamento ou te ajudar em outra questão?"
 
             try:
-                await evolution.enviar_mensagem_texto(
+                await evolution.enviar_mensagem_proativa(
                     conversa["whatsapp_instance"], conversa["telefone_paciente"], texto
                 )
             except Exception:

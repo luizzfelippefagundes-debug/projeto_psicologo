@@ -93,7 +93,7 @@ async def verificar_e_enviar_pos_consulta() -> None:
                 "Ficou alguma dúvida sobre as orientações ou existe algo em que possamos te ajudar?"
             )
             try:
-                await evolution.enviar_mensagem_texto(
+                await evolution.enviar_mensagem_proativa(
                     sessao["whatsapp_instance"], sessao["paciente_telefone"], mensagem
                 )
             except Exception:
@@ -142,7 +142,7 @@ async def verificar_e_enviar_aniversarios() -> None:
                 "É um prazer cuidar de você!"
             )
             try:
-                await evolution.enviar_mensagem_texto(
+                await evolution.enviar_mensagem_proativa(
                     paciente["whatsapp_instance"], paciente["telefone"], mensagem
                 )
             except Exception:

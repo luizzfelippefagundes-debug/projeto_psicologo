@@ -113,7 +113,7 @@ async def checar_lista_espera(
     data_formatada = data_hora_liberada.astimezone(BRASILIA).strftime("%d/%m/%Y às %H:%M")
     prazo_formatado = expira_em.strftime("%H:%M")
     try:
-        await evolution.enviar_mensagem_texto(
+        await evolution.enviar_mensagem_proativa(
             whatsapp_instance,
             candidato["paciente_telefone"],
             f"Um horário compatível com sua solicitação está disponível: {data_formatada}. Ele "
@@ -145,7 +145,7 @@ async def _verificar_expiracao_e_lembrete() -> None:
             if sessao["whatsapp_instance"]:
                 prazo_formatado = sessao["expira_em"].astimezone(BRASILIA).strftime("%H:%M")
                 try:
-                    await evolution.enviar_mensagem_texto(
+                    await evolution.enviar_mensagem_proativa(
                         sessao["whatsapp_instance"],
                         sessao["paciente_telefone"],
                         f"Lembramos que seu horário reservado expira às {prazo_formatado} de "

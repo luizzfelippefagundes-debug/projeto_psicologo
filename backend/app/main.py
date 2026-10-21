@@ -664,6 +664,51 @@ async def listar_sessoes_periodo(
     return [dict(row) for row in rows]
 
 
+class GravacaoManualBody(BaseModel):
+    titulo: str | None = None
+    transcricao: str | None = None
+    resumo: str | None = None
+    gravado_em: str | None = None
+
+
+@app.post("/plaud/gravacoes/manual")
+async def criar_gravacao_manual(
+    body: GravacaoManualBody,
+    profissional_id: int = Depends(auth.get_current_profissional_id),
+):
+    if not body.transcricao and not body.resumo:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Preencha pelo menos a transcrição ou o resumo.",
+        )
+    gravado_em_dt = None
+    if body.gravado_em:
+        try:
+            gravado_em_dt = datetime.fromisoformat(body.gravado_em.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    payload_bruto = {
+        "titulo": body.titulo,
+        "transcricao": body.transcricao,
+        "resumo": body.resumo,
+        "gravado_em": body.gravado_em,
+        "origem": "manual",
+    }
+
+    async with db.pool.acquire() as conn:
+        gravacao_id = await conn.fetchval(
+            """
+            INSERT INTO plaud_gravacoes (profissional_id, transcricao, resumo, titulo, gravado_em, payload_bruto)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+            RETURNING id
+            """,
+            profissional_id, body.transcricao, body.resumo, body.titulo,
+            gravado_em_dt, json.dumps(payload_bruto),
+        )
+    return {"status": "criado", "gravacao_id": gravacao_id}
+
+
 @app.get("/plaud/gravacoes-disponiveis")
 async def listar_gravacoes_disponiveis(profissional_id: int = Depends(auth.get_current_profissional_id)):
     return await plaud.listar_disponiveis(profissional_id)
@@ -1081,7 +1126,7 @@ async def confirmar_sessao_por_whatsapp(
     )
 
     try:
-        await evolution.enviar_mensagem_texto(info["whatsapp_instance"], info["telefone"], texto)
+        await evolution.enviar_mensagem_proativa(info["whatsapp_instance"], info["telefone"], texto)
     except Exception:
         logger.exception("Falha ao enviar confirmação por WhatsApp (sessao_id=%s)", sessao_id)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Não foi possível enviar agora, tenta de novo")
@@ -1505,7 +1550,7 @@ async def bot_simular(
     return resultado
 
 
-HISTORICO_MAX_MENSAGENS = 20  # últimos N turnos (user+assistant) mantidos por conversa
+HISTORICO_MAX_MENSAGENS = evolution.HISTORICO_MAX_MENSAGENS
 
 # Lock por paciente: garante que duas mensagens do mesmo telefone nunca sejam
 # processadas em paralelo (a Evolution API às vezes dispara webhooks quase
