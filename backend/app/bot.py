@@ -61,7 +61,7 @@ def _alega_confirmacao_sem_ter_agendado(texto: str, acoes: list[str]) -> bool:
     return False
 
 BRASILIA = ZoneInfo("America/Sao_Paulo")
-MODELO = "claude-sonnet-4-5"
+MODELO = "claude-haiku-4-5"
 MAX_TOKENS_RESPOSTA = 1024
 MAX_RODADAS_FERRAMENTA = 4
 
