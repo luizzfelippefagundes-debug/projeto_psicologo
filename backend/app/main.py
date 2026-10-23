@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 import secrets
+from collections import deque
 from contextlib import asynccontextmanager
+from time import monotonic
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -1566,6 +1568,24 @@ def _lock_da_conversa(profissional_id: int, telefone_paciente: str) -> asyncio.L
     return _locks_conversa[chave]
 
 
+# Teto de mensagens por número: um paciente real nunca manda isso, mas uma conta automática (ou
+# um loop) manda, e cada mensagem respondida é uma chamada paga à IA.
+LIMITE_MENSAGENS_POR_JANELA = 30
+JANELA_LIMITE_SEGUNDOS = 600
+_mensagens_recentes: dict[str, deque] = {}
+
+
+def _excedeu_limite_de_mensagens(telefone: str) -> bool:
+    agora = monotonic()
+    fila = _mensagens_recentes.setdefault(telefone, deque())
+    while fila and agora - fila[0] > JANELA_LIMITE_SEGUNDOS:
+        fila.popleft()
+    if len(fila) >= LIMITE_MENSAGENS_POR_JANELA:
+        return True
+    fila.append(agora)
+    return False
+
+
 def _extrair_mensagem_whatsapp(
     payload: dict,
 ) -> tuple[str | None, str | None, bool, str | None, str | None]:
@@ -1614,6 +1634,12 @@ async def webhook_whatsapp(request: Request):
     if not instance or from_me or not remote_jid or not texto:
         return {"status": "ignorado"}
 
+    # Grupos, listas de transmissão, status e canais não são pacientes. Sem esse filtro o bot
+    # respondia a cada mensagem de grupo (visto em produção: ~400 chamadas pagas por dia vindas
+    # de 2 grupos de promoção em que o número estava).
+    if remote_jid.endswith(("@g.us", "@broadcast", "@newsletter")):
+        return {"status": "ignorado_nao_individual"}
+
     telefone_paciente = remote_jid.split("@")[0]
 
     if message_id:
@@ -1638,6 +1664,10 @@ async def webhook_whatsapp(request: Request):
         if telefone_paciente not in permitidos:
             logger.info("Mensagem ignorada (modo teste, número fora da lista): %s", telefone_paciente)
             return {"status": "ignorado_modo_teste"}
+
+    if _excedeu_limite_de_mensagens(telefone_paciente):
+        logger.warning("Mensagem ignorada (limite de mensagens por número excedido): %s", telefone_paciente)
+        return {"status": "ignorado_limite"}
 
     async with db.pool.acquire() as conn:
         profissional_id = await conn.fetchval(
